@@ -14,7 +14,7 @@
 3. 重启或执行 `/res admin reload`。
 4. 游戏内输入 `/res` 即可开始使用（所有功能都有 GUI，命令仅作快捷方式保留）。
 
-经济系统通过**运行时反射**接入 [EconomyPlugin] 的 ServicesManager 服务（`EconomyAPI`），
+经济系统通过**运行时反射**接入 [EconomyPlugin](https://github.com/lcxws/EconomyPlugin) 的 ServicesManager 服务（`EconomyAPI`），
 未安装经济插件时保护功能不受影响，仅购买功能不可用。
 
 ## 从源码构建
