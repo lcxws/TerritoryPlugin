@@ -19,6 +19,20 @@ max-chunks-per-player: -1
 # 进阶保护模块价格（每个领地一次性买断，之后可随时开关）
 module-price: 500
 
+# 各模块单独定价（可选，未列出的模块使用 module-price 兜底）
+module-prices:
+  EXPLOSION: 500      # 防爆炸
+  MOB_GRIEF: 500      # 防生物破坏
+  PVP: 500            # 禁用PvP
+  FIRE: 500           # 防火焰蔓延
+  MOB_SPAWN: 500      # 禁止刷怪
+  LIGHTNING: 500      # 防雷击
+  ANIMAL_GRIEF: 500   # 防动物破坏
+  NO_PICKUP: 500      # 禁访客拾取
+  NO_DROP: 500        # 禁访客丢弃
+  NO_TELEPORT: 500    # 禁访客传送
+  LEAF_DECAY: 500     # 防树叶腐烂
+
 # 进出领地聊天提示
 entry-exit-messages: true
 
@@ -83,6 +97,7 @@ messages:
   tp-success: "&a已传送到领地（主人: &e%owner%&a）。"
   protect-denied: "&c这是 &e%owner% &c的领地，你不能这样做。"
   pvp-denied: "&c该领地已开启禁用PvP模块，无法攻击玩家。"
+  tp-blocked: "&c该领地已开启禁访客传送模块，请联系主人加入白名单后传送。"
   gui-not-owner: "&c只有站在自己领地内的领主可以打开保护设置。"
   gui-input-prompt: "&a请在聊天栏输入 &e玩家名 &a以继续，输入 &e取消 &a退出输入（30秒内有效）。"
   gui-input-cancelled: "&7已取消输入。"

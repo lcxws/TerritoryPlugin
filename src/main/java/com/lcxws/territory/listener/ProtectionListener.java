@@ -8,6 +8,7 @@ import org.bukkit.Material;
 import org.bukkit.block.Block;
 import org.bukkit.block.BlockFace;
 import org.bukkit.block.DoubleChest;
+import org.bukkit.entity.Animals;
 import org.bukkit.entity.Entity;
 import org.bukkit.entity.Monster;
 import org.bukkit.entity.Player;
@@ -30,6 +31,7 @@ import org.bukkit.event.entity.EntityChangeBlockEvent;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
 import org.bukkit.event.entity.EntityExplodeEvent;
 import org.bukkit.event.entity.EntityInteractEvent;
+import org.bukkit.event.entity.EntityPickupItemEvent;
 import org.bukkit.event.entity.EntityPlaceEvent;
 import org.bukkit.event.hanging.HangingBreakByEntityEvent;
 import org.bukkit.event.hanging.HangingPlaceEvent;
@@ -37,11 +39,15 @@ import org.bukkit.event.inventory.InventoryMoveItemEvent;
 import org.bukkit.event.player.PlayerArmorStandManipulateEvent;
 import org.bukkit.event.player.PlayerBucketEmptyEvent;
 import org.bukkit.event.player.PlayerBucketFillEvent;
+import org.bukkit.event.player.PlayerDropItemEvent;
 import org.bukkit.event.player.PlayerFishEvent;
 import org.bukkit.event.player.PlayerInteractAtEntityEvent;
 import org.bukkit.event.player.PlayerInteractEntityEvent;
 import org.bukkit.event.player.PlayerInteractEvent;
 import org.bukkit.event.player.PlayerTakeLecternBookEvent;
+import org.bukkit.event.block.LeavesDecayEvent;
+import org.bukkit.event.entity.CreatureSpawnEvent;
+import org.bukkit.event.weather.LightningStrikeEvent;
 import org.bukkit.event.vehicle.VehicleDamageEvent;
 import org.bukkit.event.vehicle.VehicleDestroyEvent;
 import org.bukkit.inventory.BlockInventoryHolder;
@@ -255,12 +261,71 @@ public class ProtectionListener implements Listener {
 
     /* ========================= 进阶模块：防生物破坏 ========================= */
 
-    /** 只拦敌对生物（僵尸破门/末影人搬方块/凋灵冲撞/掠夺者毁 crops），动物（如羊吃草）不受影响 */
+    /** 敌对生物破坏走防生物破坏模块，动物（羊吃草/兔子啃作物等）走防动物破坏模块 */
     @EventHandler(ignoreCancelled = true)
     public void onEntityChangeBlock(EntityChangeBlockEvent event) {
-        if (!(event.getEntity() instanceof Monster)) return;
+        if (event.getEntity() instanceof Player) return; // 玩家行为由基础保护处理
         Territory t = tAt(event.getBlock().getLocation());
-        if (t != null && t.moduleEnabled(Module.MOB_GRIEF)) {
+        if (t == null) return;
+        if (event.getEntity() instanceof Monster) {
+            if (t.moduleEnabled(Module.MOB_GRIEF)) {
+                event.setCancelled(true);
+            }
+        } else if (event.getEntity() instanceof Animals) {
+            if (t.moduleEnabled(Module.ANIMAL_GRIEF)) {
+                event.setCancelled(true);
+            }
+        }
+    }
+
+    /* ========================= 进阶模块：禁止刷怪 ========================= */
+
+    /** 阻止敌对生物在领地内生成（自然生成/刷怪笼/刷怪蛋/增援等一律拦截） */
+    @EventHandler(ignoreCancelled = true)
+    public void onCreatureSpawn(CreatureSpawnEvent event) {
+        if (!(event.getEntity() instanceof Monster)) return;
+        Territory t = tAt(event.getLocation());
+        if (t != null && t.moduleEnabled(Module.MOB_SPAWN)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /* ========================= 进阶模块：防雷击 ========================= */
+
+    @EventHandler(ignoreCancelled = true)
+    public void onLightningStrike(LightningStrikeEvent event) {
+        Territory t = tAt(event.getLightning().getLocation());
+        if (t != null && t.moduleEnabled(Module.LIGHTNING)) {
+            event.setCancelled(true);
+        }
+    }
+
+    /* ========================= 进阶模块：禁访客拾取 / 禁访客丢弃 ========================= */
+
+    /** 非白名单成员无法捡起领地内掉落物（静默拦截，防刷屏） */
+    @EventHandler(ignoreCancelled = true)
+    public void onPickup(EntityPickupItemEvent event) {
+        if (!(event.getEntity() instanceof Player p)) return;
+        Territory t = tAt(event.getItem().getLocation());
+        if (t == null || trusted(p, t)) return;
+        event.setCancelled(true);
+    }
+
+    /** 非白名单成员无法在领地内丢弃物品（静默拦截） */
+    @EventHandler(ignoreCancelled = true)
+    public void onDrop(PlayerDropItemEvent event) {
+        Player p = event.getPlayer();
+        Territory t = tAt(event.getPlayer().getLocation());
+        if (t == null || trusted(p, t)) return;
+        event.setCancelled(true);
+    }
+
+    /* ========================= 进阶模块：防树叶腐烂 ========================= */
+
+    @EventHandler(ignoreCancelled = true)
+    public void onLeavesDecay(LeavesDecayEvent event) {
+        Territory t = tAt(event.getBlock().getLocation());
+        if (t != null && t.moduleEnabled(Module.LEAF_DECAY)) {
             event.setCancelled(true);
         }
     }

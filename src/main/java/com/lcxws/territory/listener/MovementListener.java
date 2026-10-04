@@ -49,6 +49,16 @@ public class MovementListener implements Listener {
         Location from = event.getFrom();
         Location to = event.getTo();
         if (to == null) return;
+        // 禁访客传送模块：非信任成员无法传送进入领地（步行不受影响）
+        Territory toT = plugin.getTerritories().getAt(to);
+        if (toT != null && toT.moduleEnabled(com.lcxws.territory.Module.NO_TELEPORT)
+                && !toT.isTrusted(event.getPlayer().getUniqueId())
+                && !plugin.getTerritories().bypassProtection(event.getPlayer())) {
+            event.setCancelled(true);
+            plugin.getMessages().send(event.getPlayer(), "tp-blocked",
+                    "%owner%", plugin.getTerritories().nameFor(toT.getOwner()));
+            return;
+        }
         handleCross(event.getPlayer(), from, to, event);
     }
 

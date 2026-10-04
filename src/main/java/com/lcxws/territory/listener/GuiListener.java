@@ -45,7 +45,18 @@ public class GuiListener implements Listener {
 
     private enum GuiType {MAIN, MODULES, WHITELIST, BLACKLIST, TPLIST}
 
-    private static final int[] MODULE_SLOTS = {10, 12, 14, 16};
+    /** 模块槽位：从第2行第1格起，按模块数量自动排布（45格界面最多容纳20个模块） */
+    private static final List<Integer> MODULE_SLOTS = buildModuleSlots();
+    private static final int MODULES_BACK_SLOT = 40;
+    private static final int MODULES_CLOSE_SLOT = 44;
+
+    private static List<Integer> buildModuleSlots() {
+        List<Integer> slots = new ArrayList<>();
+        for (Module m : Module.values()) {
+            slots.add(9 + m.ordinal());
+        }
+        return slots;
+    }
     private static final long INPUT_TIMEOUT_MS = 30_000;
 
     private static class GuiSession {
@@ -174,19 +185,20 @@ public class GuiListener implements Listener {
 
     public void openModules(Player p, Territory t) {
         sessions.put(p.getUniqueId(), new GuiSession(GuiType.MODULES, t.getId()));
-        Inventory inv = Bukkit.createInventory(null, 27, MODULES_TITLE);
+        Inventory inv = Bukkit.createInventory(null, 45, MODULES_TITLE);
         ItemStack filler = item(Material.GRAY_STAINED_GLASS_PANE, " ", null);
-        for (int i = 0; i < 27; i++) inv.setItem(i, filler);
+        for (int i = 0; i < 45; i++) inv.setItem(i, filler);
         inv.setItem(4, buildInfoItem(p, t));
-        for (int i = 0; i < MODULE_SLOTS.length; i++) {
-            inv.setItem(MODULE_SLOTS[i], buildModuleItem(t, Module.values()[i]));
+        for (int i = 0; i < Module.values().length; i++) {
+            inv.setItem(MODULE_SLOTS.get(i), buildModuleItem(t, Module.values()[i]));
         }
-        inv.setItem(22, item(Material.ARROW, "§e返回主菜单", null));
+        inv.setItem(MODULES_BACK_SLOT, item(Material.ARROW, "§e返回主菜单", null));
+        inv.setItem(MODULES_CLOSE_SLOT, item(Material.BARRIER, "§c关闭", null));
         p.openInventory(inv);
     }
 
     private ItemStack buildModuleItem(Territory t, Module m) {
-        double price = plugin.getConfig().getDouble("module-price", 500);
+        double price = m.price(plugin);
         String status;
         List<String> lore = new ArrayList<>();
         lore.add("§7" + m.desc);
@@ -337,8 +349,12 @@ public class GuiListener implements Listener {
             openNextTick(p, () -> openMain(p));
             return;
         }
-        if (slot == 22) {
+        if (slot == MODULES_BACK_SLOT) {
             openNextTick(p, () -> openMain(p));
+            return;
+        }
+        if (slot == MODULES_CLOSE_SLOT) {
+            p.closeInventory();
             return;
         }
         Module m = moduleAtSlot(slot);
@@ -350,7 +366,7 @@ public class GuiListener implements Listener {
 
     /** 模块购买/开关：来源可以是主菜单打开的模块 GUI */
     private void handleModuleAction(Player p, Territory t, Module m, Inventory inv) {
-        double price = plugin.getConfig().getDouble("module-price", 500);
+        double price = m.price(plugin);
         if (t.getPurchased().contains(m)) {
             if (t.getEnabled().contains(m)) {
                 t.getEnabled().remove(m);
@@ -500,14 +516,14 @@ public class GuiListener implements Listener {
     }
 
     private Module moduleAtSlot(int slot) {
-        for (int i = 0; i < MODULE_SLOTS.length; i++) {
-            if (MODULE_SLOTS[i] == slot) return Module.values()[i];
-        }
+        int index = MODULE_SLOTS.indexOf(slot);
+        Module[] values = Module.values();
+        if (index >= 0 && index < values.length) return values[index];
         return null;
     }
 
     private int slotOf(Module m) {
-        return MODULE_SLOTS[m.ordinal()];
+        return MODULE_SLOTS.get(m.ordinal());
     }
 
     private ItemStack item(Material mat, String name, List<String> lore) {
