@@ -1,0 +1,35 @@
+plugins {
+    id 'java'
+}
+
+group 'com.lcxws'
+version '1.0.0'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(17)
+    }
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+}
+tasks.withType(ProcessResources).configureEach {
+    filteringCharset = 'UTF-8'
+}
+
+repositories {
+    mavenCentral()
+    maven { url "https://maven.mohistmc.com/" }
+    maven { url "https://papermc.io/repo/repository/maven-public/" }
+}
+
+dependencies {
+    // Mohist 1.20.1 开发包（内含 Bukkit/Spigot API），与 EconomyPlugin 保持一致
+    compileOnly 'com.mohistmc:mohistdev:1.20.1'
+    // EconomyPlugin 通过运行时反射接入（见 manager/EconomyHook），无需编译依赖
+}
+
+jar {
+    archiveFileName = 'TerritoryPlugin-1.0.0.jar'
+}

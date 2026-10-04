@@ -1,0 +1,121 @@
+# ============================================================
+#  TerritoryPlugin 领地插件配置
+#  轻量级区块领地：站在区块内购买即圈地，相邻区块自动合并
+# ============================================================
+
+# 启用领地系统的世界（按需求：仅主世界；把你的主世界名字写在这里）
+enabled-worlds:
+  - "world"
+
+# 购买一个区块的价格
+chunk-price: 2500
+
+# 主动放弃区块（/res unclaim）的退款比例：0.5 = 退一半，0 = 不退
+refund-ratio: 0.5
+
+# 每位玩家最多可拥有的区块数量（-1 = 不限制）
+max-chunks-per-player: -1
+
+# 进阶保护模块价格（每个领地一次性买断，之后可随时开关）
+module-price: 500
+
+# 进出领地聊天提示
+entry-exit-messages: true
+
+# /res view 边界粒子渲染
+view-particle-seconds: 30
+view-radius-chunks: 2
+
+# 异步自动保存间隔（秒）。修改数据后约在此间隔后写盘，关服时强制保存
+autosave-seconds: 5
+
+# ------------------------------------------------------------
+# 超级管理员（可越权管理任何领地）
+# 注意：OP 本身【不会】越权！必须把 UUID 手动加到下面才会生效。
+# 游戏内可用 /res admin whoami 查询自己的 UUID，控制台始终拥有全部管理权限。
+# 示例：
+# superadmins:
+#   - "069a79f4-44e9-4726-a5be-fca90e38aaf5"
+superadmins: []
+
+# 超级管理员是否也无视领地保护（拆/放方块等）
+superadmin-bypass-protection: true
+
+# ------------------------------------------------------------
+# 消息文本（支持 & 颜色代码；%...% 为占位符）
+messages:
+  prefix: "&8[&6领地&8] &r"
+  no-permission: "&c你没有权限执行此操作。"
+  world-disabled: "&c当前世界未启用领地系统。"
+  already-own: "&e这个区块已经是你的领地了。"
+  owned-by-other: "&c这个区块已被 &e%owner% &c的领地占据。"
+  no-economy: "&c经济插件未安装或未就绪，无法进行购买。"
+  not-enough-money: "&c余额不足！需要 &e%need%&c。"
+  max-chunks: "&c你已达到区块数量上限（&e%max%&c）。"
+  claim-success: "&a成功购买区块！花费 &e%cost%&a，余额 &e%balance%&a。相邻区块会自动合并。"
+  unclaim-no-territory: "&c这里没有领地。"
+  unclaim-not-owner: "&c只有领主可以放弃区块。"
+  unclaim-success: "&a已放弃该区块，退款 &e%refund%&a，余额 &e%balance%&a。"
+  modules-lost-note: "&e注意：领地已全部拆除，此前购买的进阶保护模块随之失效。"
+  entered: "&a▶ 进入 &e%owner% &a的领地"
+  left: "&7◁ 离开 &e%owner% &7的领地"
+  banned-entry: "&c你被禁止进入该领地。"
+  ban-ejected: "&c你已被移出领地并加入黑名单。"
+  trust-add: "&a已将 &e%player% &a加入白名单（可完全使用领地）。"
+  trust-already: "&e该玩家已经在白名单中。"
+  trust-is-banned: "&c该玩家在黑名单中，请先执行 /res unban <玩家>。"
+  trust-remove: "&a已将 &e%player% &a移出白名单。"
+  trust-not-found: "&c白名单中没有该玩家。"
+  ban-add: "&a已将 &e%player% &a加入黑名单（禁止进入）。"
+  ban-was-trusted: "&e该玩家原本在白名单中，已自动移出。"
+  ban-remove: "&a已将 &e%player% &a移出黑名单。"
+  ban-not-found: "&c黑名单中没有该玩家。"
+  cannot-target-self: "&c不能对自己执行该操作。"
+  not-in-territory: "&c你所在的位置没有领地。"
+  not-owner: "&c只有领主可以执行此操作。"
+  player-not-found: "&c找不到玩家 &e%name%&c。"
+  settp-success: "&a领地传送点已设置到你当前位置。"
+  tp-list-header: "&6===== 可传送的领地（/res tp <编号>） ====="
+  tp-list-item: "&e#%index% &7| 主人: %owner% | %chunks% 个区块 | 中心: %x%, %z%"
+  tp-none: "&c没有你可以传送的领地（需要是领主或白名单成员）。"
+  tp-no-index: "&c请输入 /res tp <编号>，用 /res tp list 查看列表。"
+  tp-bad-index: "&c编号不存在，用 /res tp list 查看。"
+  tp-success: "&a已传送到领地（主人: &e%owner%&a）。"
+  protect-denied: "&c这是 &e%owner% &c的领地，你不能这样做。"
+  pvp-denied: "&c该领地已开启禁用PvP模块，无法攻击玩家。"
+  gui-not-owner: "&c只有站在自己领地内的领主可以打开保护设置。"
+  gui-input-prompt: "&a请在聊天栏输入 &e玩家名 &a以继续，输入 &e取消 &a退出输入（30秒内有效）。"
+  gui-input-cancelled: "&7已取消输入。"
+  view-none: "&c这里没有领地可查看。"
+  view-start: "&a正在渲染领地边界粒子 &e%seconds% &a秒…"
+  view-done: "&7边界粒子渲染结束。"
+  module-buy-success: "&a已购买并开启模块 &e%module%&a，花费 &e%price%&a。"
+  module-toggle-on: "&a模块 &e%module% &a已开启。"
+  module-toggle-off: "&e模块 &e%module% &e已关闭（已购买，可随时再开启）。"
+  admin-no-permission: "&c只有超级管理员（config 白名单）或控制台可以执行管理命令。"
+  admin-deleted: "&a已删除该领地（共 %chunks% 个区块）。"
+  admin-deleted-chunk: "&a已删除该区块（领地剩余 %chunks% 个区块）。"
+  admin-deleted-all: "&a已删除玩家 &e%player% &a的全部 %count% 个领地。"
+  admin-reloaded: "&a配置已重载。"
+  admin-whoami: "&a你的UUID: &e%uuid%"
+  info-header: "&6===== 领地信息 ====="
+  info-row: "&7%key%&8: &f%value%"
+  info-none: "&c这里没有领地。（站在想要购买的区块内输入 &e/res claim&c 购买）"
+  list-header: "&6===== 你的领地 ====="
+  list-item: "&e#%index% &7| %chunks% 个区块 | 中心: %x%, %z% | 模块: %modules%"
+  list-none: "&c你还没有任何领地。"
+  help:
+    - "&6===== 领地命令 /res（/land） ====="
+    - "&e/res &7- 打开领地菜单 GUI（推荐）"
+    - "&e/res claim &7- 购买脚下区块（相邻自动合并）"
+    - "&e/res unclaim &7- 放弃脚下区块（退还部分费用）"
+    - "&e/res info &7- 查看当前区块领地信息"
+    - "&e/res list &7- 查看自己的领地列表"
+    - "&e/res tp <编号> &7- 传送到领地"
+    - "&e/res settp &7- 设置领地传送点（站在自己领地内）"
+    - "&e/res trust <玩家> &7- 白名单（完全信任）"
+    - "&e/res untrust <玩家> &7- 移出白名单"
+    - "&e/res ban <玩家> &7- 黑名单（禁止进入）"
+    - "&e/res unban <玩家> &7- 移出黑名单"
+    - "&e/res view &7- 显示领地边界粒子（30秒）"
+    - "&e/res admin &7- 超级管理员命令"
