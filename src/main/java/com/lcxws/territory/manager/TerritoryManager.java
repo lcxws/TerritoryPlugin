@@ -198,6 +198,10 @@ public class TerritoryManager {
         if (chunksBefore > 1 && compsAfter > 1 && hadModules) {
             player.sendMessage(plugin.getMessages().prefixed("split-modules-note"));
         }
+        // 领地被完全拆除：已购模块随之失效，须提示
+        if (chunksBefore == 1 && hadModules) {
+            player.sendMessage(plugin.getMessages().prefixed("modules-lost-note"));
+        }
         return "unclaim-success:" + plugin.getEconomy().format(refund);
     }
 
@@ -255,16 +259,14 @@ public class TerritoryManager {
             comps.add(comp);
         }
 
-        // 2. 收集旧领地（该主人、该世界、拥有其中任一区块的）
+        // 2. 收集旧领地：直接扫描该主人在该世界的全部领地。
+        //    不能走区块索引反查——放弃最后一片区块时区块集合为空，反查会漏掉旧领地，
+        //    导致"放弃成功但领地仍在"的幽灵领地；直接扫描还能顺带自愈索引不同步。
         Set<Territory> old = new HashSet<>();
-        Map<Long, UUID> idx = chunkIndex.get(world);
-        for (Long c : chunks) {
-            if (idx == null) break;
-            UUID id = idx.get(c);
-            if (id == null) continue;
-            Territory t = territories.get(id);
-            if (t != null && t.getOwner().equals(owner) && t.getWorld().equals(world)) old.add(t);
+        for (Territory t : territories.values()) {
+            if (t.getOwner().equals(owner) && t.getWorld().equals(world)) old.add(t);
         }
+        Map<Long, UUID> idx = chunkIndex.get(world);
 
         // 3. 为每个旧领地指定“归属分量”：优先含传送点的分量，否则含区块最多的分量
         Map<UUID, Integer> home = new HashMap<>();
