@@ -1,5 +1,5 @@
 name: Territory
-version: 2.4.1
+version: 2.5.0
 main: com.lcxws.territory.TerritoryPlugin
 api-version: '1.20'
 authors: [Lcxws]
@@ -13,3 +13,38 @@ commands:
     description: 领地系统主命令
     usage: /res help
     aliases: [land]
+
+permissions:
+  territory.command.claim:
+    description: 允许 /res claim 购买脚下区块
+    default: true
+  territory.command.unclaim:
+    description: 允许 /res unclaim 放弃区块（含退款）
+    default: true
+  territory.command.gui:
+    description: 允许 /res 打开领地菜单 GUI
+    default: true
+  territory.command.info:
+    description: 允许 /res info 与 /res list 查看领地信息
+    default: true
+  territory.command.tp:
+    description: 允许 /res tp 传送到领地
+    default: true
+  territory.command.settp:
+    description: 允许 /res settp 设置领地传送点
+    default: true
+  territory.command.trust:
+    description: 允许 /res trust / untrust 管理白名单
+    default: true
+  territory.command.ban:
+    description: 允许 /res ban / unban 管理黑名单
+    default: true
+  territory.command.view:
+    description: 允许 /res view 显示领地边界粒子
+    default: true
+  territory.admin:
+    description: 允许 /res admin 管理命令（等同 config 超管名单，默认关闭）
+    default: false
+  territory.bypass:
+    description: 无视领地保护，可在他人领地破坏/放置等（默认关闭，慎用；授予 territory.* 会包含此项）
+    default: false

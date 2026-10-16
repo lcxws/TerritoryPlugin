@@ -72,12 +72,14 @@ storage:
 # 超级管理员（可越权管理任何领地）
 # 注意：OP 本身【不会】越权！必须把 UUID 手动加到下面才会生效。
 # 游戏内可用 /res admin whoami 查询自己的 UUID，控制台始终拥有全部管理权限。
+# 也可以不用本名单：用 LuckPerms 等权限插件授予 territory.admin 权限节点即可（与名单取并集）。
 # 示例：
 # superadmins:
 #   - "069a79f4-44e9-4726-a5be-fca90e38aaf5"
 superadmins: []
 
 # 超级管理员是否也无视领地保护（拆/放方块等）
+# 注意：LuckPerms 的 territory.bypass 权限节点不受此开关影响（显式授予即生效，慎用）
 superadmin-bypass-protection: true
 
 # ------------------------------------------------------------
@@ -132,7 +134,7 @@ messages:
   module-buy-success: "&a已购买并开启模块 &e%module%&a，花费 &e%price%&a。"
   module-toggle-on: "&a模块 &e%module% &a已开启。"
   module-toggle-off: "&e模块 &e%module% &e已关闭（已购买，可随时再开启）。"
-  admin-no-permission: "&c只有超级管理员（config 白名单）或控制台可以执行管理命令。"
+  admin-no-permission: "&c只有超级管理员（config 名单或 territory.admin 权限节点）或控制台可以执行管理命令。"
   admin-deleted: "&a已删除该领地（共 %chunks% 个区块）。"
   admin-deleted-chunk: "&a已删除该区块（领地剩余 %chunks% 个区块）。"
   admin-deleted-all: "&a已删除玩家 &e%player% &a的全部 %count% 个领地。"

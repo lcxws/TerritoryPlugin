@@ -172,7 +172,7 @@ public class TerritoryManager {
         String world = player.getWorld().getName();
         Territory t = getAt(player.getLocation());
         if (t == null) return "unclaim-no-territory";
-        if (!t.isOwner(player.getUniqueId()) && !isSuperAdmin(player.getUniqueId())) {
+        if (!t.isOwner(player.getUniqueId()) && !isAdmin(player)) {
             return "unclaim-not-owner";
         }
 
@@ -439,14 +439,32 @@ public class TerritoryManager {
                 TerritoryInfo.of(t, nameFor(t.getOwner()))));
     }
 
-    /* ========================= 超级管理员 ========================= */
+    /* ========================= 超级管理员 / 权限节点 ========================= */
+
+    /** 权限节点：管理命令（等同 config 超管名单，默认关闭） */
+    public static final String PERM_ADMIN = "territory.admin";
+    /** 权限节点：无视领地保护（显式授予才生效，慎用） */
+    public static final String PERM_BYPASS = "territory.bypass";
 
     public boolean isSuperAdmin(UUID uuid) {
         return plugin.getConfig().getStringList("superadmins").contains(uuid.toString());
     }
 
-    /** 保护检查中的越权：仅超管名单内且开启 bypass 时有效（OP 本身无效） */
+    /** 是否拥有管理权限：config 超管名单，或持有 territory.admin 权限节点（OP 本身无效） */
+    public boolean isAdmin(Player player) {
+        return player != null && (isSuperAdmin(player.getUniqueId())
+                || player.hasPermission(PERM_ADMIN));
+    }
+
+    /**
+     * 保护检查中的越权：
+     * - territory.bypass 权限节点：显式授予即生效（不受 config 开关影响，慎用）；
+     * - config 超管名单：仅在开启 superadmin-bypass-protection 时生效。
+     * OP 本身【不】越权。
+     */
     public boolean bypassProtection(Player player) {
+        if (player == null) return false;
+        if (player.hasPermission(PERM_BYPASS)) return true;
         return plugin.getConfig().getBoolean("superadmin-bypass-protection", true)
                 && isSuperAdmin(player.getUniqueId());
     }
