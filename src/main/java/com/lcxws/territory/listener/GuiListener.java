@@ -123,7 +123,7 @@ public class GuiListener implements Listener {
         inv.setItem(20, item(Material.COMPASS, "§a传送到领地",
                 Arrays.asList("§7查看你可以传送的领地", "", "§e点击打开")));
         inv.setItem(22, item(Material.BARRIER, "§c关闭", null));
-        if (plugin.getTerritories().isSuperAdmin(p.getUniqueId())) {
+        if (plugin.getTerritories().isAdmin(p)) {
             inv.setItem(26, item(Material.COMMAND_BLOCK, "§4超级管理",
                     List.of("§7点击查看管理命令")));
         }
@@ -334,7 +334,7 @@ public class GuiListener implements Listener {
             case 20 -> openNextTick(p, () -> openTpList(p));
             case 22 -> p.closeInventory();
             case 26 -> {
-                if (plugin.getTerritories().isSuperAdmin(p.getUniqueId())) {
+                if (plugin.getTerritories().isAdmin(p)) {
                     p.sendMessage("§6管理命令: /res admin <whoami|reload|list|info|delete|deletechunk>");
                 }
             }

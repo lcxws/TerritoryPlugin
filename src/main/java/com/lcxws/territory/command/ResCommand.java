@@ -50,6 +50,13 @@ public class ResCommand implements CommandExecutor, TabCompleter {
             return true;
         }
 
+        // 权限节点门控（help 与未知子命令不设限；admin 走 isAdmin 单独判定）
+        String node = permNode(sub);
+        if (node != null && !p.hasPermission(node)) {
+            plugin.getMessages().send(p, "no-permission");
+            return true;
+        }
+
         switch (sub) {
             case "gui" -> plugin.getGui().openMain(p); // /res 与 /res gui 都打开主菜单
             case "claim" -> Actions.claim(plugin, p);
@@ -85,7 +92,7 @@ public class ResCommand implements CommandExecutor, TabCompleter {
             plugin.getMessages().send(p, "not-in-territory");
             return;
         }
-        if (!t.isOwner(p.getUniqueId()) && !plugin.getTerritories().isSuperAdmin(p.getUniqueId())) {
+        if (!t.isOwner(p.getUniqueId()) && !plugin.getTerritories().isAdmin(p)) {
             plugin.getMessages().send(p, "not-owner");
             return;
         }
@@ -215,8 +222,8 @@ public class ResCommand implements CommandExecutor, TabCompleter {
 
     private boolean adminCommand(CommandSender sender, Player p, String[] args) {
         TerritoryManager tm = plugin.getTerritories();
-        // 控制台始终允许；游戏内仅超管名单
-        if (p != null && !tm.isSuperAdmin(p.getUniqueId())) {
+        // 控制台始终允许；游戏内需 config 超管名单或 territory.admin 权限节点
+        if (p != null && !tm.isAdmin(p)) {
             plugin.getMessages().send(sender, "admin-no-permission");
             return true;
         }
@@ -304,6 +311,24 @@ public class ResCommand implements CommandExecutor, TabCompleter {
         return true;
     }
 
+    /* ========================= 权限节点 ========================= */
+
+    /** 子命令 → 权限节点；help 与 admin 返回 null（admin 由 isAdmin 单独判定） */
+    private static String permNode(String sub) {
+        return switch (sub) {
+            case "claim" -> "territory.command.claim";
+            case "unclaim" -> "territory.command.unclaim";
+            case "info", "list" -> "territory.command.info";
+            case "tp" -> "territory.command.tp";
+            case "settp" -> "territory.command.settp";
+            case "trust", "untrust" -> "territory.command.trust";
+            case "ban", "unban" -> "territory.command.ban";
+            case "gui" -> "territory.command.gui";
+            case "view" -> "territory.command.view";
+            default -> null;
+        };
+    }
+
     /* ========================= Tab 补全 ========================= */
 
     @Override
@@ -311,8 +336,15 @@ public class ResCommand implements CommandExecutor, TabCompleter {
         List<String> result = new ArrayList<>();
         if (args.length == 1) {
             String prefix = args[0].toLowerCase();
+            Player player = sender instanceof Player pl ? pl : null;
             for (String s : PLAYER_SUBS) {
-                if (s.startsWith(prefix)) result.add(s);
+                if (!s.startsWith(prefix)) continue;
+                if (player != null) {
+                    String node = permNode(s);
+                    if (node != null && !player.hasPermission(node)) continue;
+                    if (s.equals("admin") && !plugin.getTerritories().isAdmin(player)) continue;
+                }
+                result.add(s);
             }
         } else if (args.length == 2) {
             String sub = args[0].toLowerCase();

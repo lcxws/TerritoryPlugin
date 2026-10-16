@@ -3,7 +3,7 @@
 轻量级**区块制领地插件**，面向 **Bukkit 系服务端 1.20 ～ 1.21.x**（Spigot / Paper / Mohist 等）小人数服务器。
 **全 GUI 化操作**：输入 `/res` 打开领地菜单，圈地、放弃、保护模块、白/黑名单、传送全部点选完成；
 相邻区块自动合并；进阶保护通过 GUI 自行购买开启；
-**OP 互不侵犯**——OP 不能动其他人的领地，只有 config 里的超级管理员名单和控制台能越权。
+**OP 互不侵犯**——OP 不能动其他人的领地，只有 config 超管名单、显式授予的 `territory.bypass` 权限或控制台能越权。
 
 > **版本兼容**：1.20 ～ 1.21.x 全系列（含 1.20.5+ 的 API 改名适配），已在 1.21.1 API 上通过编译兼容性验证；不支持的：Folia（区域化调度）与 1.19 及更老版本。
 
@@ -12,7 +12,7 @@
 
 ## 快速开始
 
-1. 把 `TerritoryPlugin-1.4.1.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进服务端的 `plugins` 文件夹。
+1. 把 `TerritoryPlugin-1.5.0.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进服务端的 `plugins` 文件夹。
 2. 首次启动后编辑 `plugins/Territory/config.yml`：
    - 把 `enabled-worlds` 改成你的**主世界名字**（默认 `world`，仅主世界启用领地）；
    - 想让自己越权管理的话，用 `/res admin whoami` 查询自己的 UUID 填进 `superadmins`。
@@ -33,7 +33,7 @@
 
 ```bash
 ./gradlew build
-# 产物: build/libs/TerritoryPlugin-1.4.1.jar
+# 产物: build/libs/TerritoryPlugin-1.5.0.jar
 ```
 
 无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载；本分支数据存储为 YAML，无 SQL 驱动）。
@@ -114,14 +114,44 @@ Landlord / Dominion），本仓库全部代码为原创实现，未复制任何�
 
 ## OP 互不侵犯
 
-保护检查完全不检查 OP/权限节点——OP 在别人领地里就是个普通访客。
-唯一例外：
+保护检查不看 OP——OP 在别人领地里就是个普通访客。
+能越权的只有三种，且全部需要显式开启：
 
-- `config.yml → superadmins` 中的 UUID（**默认为空**，需手动添加）；
-- 服务器后台控制台永远可以执行全部管理命令。
+- `config.yml → superadmins` 中的 UUID（**默认为空**，需手动添加；可用 `superadmin-bypass-protection` 开关关闭其保护穿越）；
+- `territory.bypass` 权限节点（**默认关闭**，用 LuckPerms 等权限插件显式授予才生效，慎用）；
+- 服务器后台控制台（永远可以执行全部管理命令）。
 
 超管命令：`/res admin <whoami|reload|list|info|delete|deletechunk>`，
-`delete <玩家名>` 可整服清理某玩家全部领地（无退款）。
+`delete <玩家名>` 可整服清理某玩家全部领地（无退款）；
+管理权限也可用 `territory.admin` 权限节点授予（默认关闭，与名单取并集）。
+
+## 权限节点（LuckPerms 等权限插件）
+
+所有玩家命令**默认开放**（`default: true`，不装权限插件时行为与以前完全一致），
+可用 LuckPerms 等权限插件对特定玩家/组**显式拒绝或授予**：
+
+| 权限节点 | 默认 | 作用 |
+|----------|------|------|
+| `territory.command.claim` | 允许 | /res claim 购买区块 |
+| `territory.command.unclaim` | 允许 | /res unclaim 放弃区块 |
+| `territory.command.gui` | 允许 | /res 打开领地菜单 |
+| `territory.command.info` | 允许 | /res info 与 /res list |
+| `territory.command.tp` | 允许 | /res tp 传送 |
+| `territory.command.settp` | 允许 | /res settp 设置传送点 |
+| `territory.command.trust` | 允许 | /res trust / untrust 管理白名单 |
+| `territory.command.ban` | 允许 | /res ban / unban 管理黑名单 |
+| `territory.command.view` | 允许 | /res view 边界粒子 |
+| `territory.admin` | **拒绝** | /res admin 管理命令（等同 config 超管名单；OP 也不自动获得） |
+| `territory.bypass` | **拒绝** | 无视领地保护（可在他人领地破坏/放置，**慎用**） |
+
+```bash
+# 示例（LuckPerms）
+/lp group default permission set territory.command.claim false   # 禁止默认组买地（改由管理员发放）
+/lp user Steve permission set territory.command.tp false         # 禁止某玩家传送
+/lp group admin permission set territory.admin true              # 管理组获得管理命令
+```
+
+⚠️ 给某人 `territory.*` 通配符会**连带授予 bypass**（可在他人领地破坏），建议逐个节点授予。
 
 ## 命令总览（快捷方式，全部功能均可在 GUI 完成）
 

@@ -23,6 +23,10 @@ public final class Actions {
     /* ========================= 圈地 / 放弃 ========================= */
 
     public static void claim(TerritoryPlugin plugin, Player p) {
+        if (!p.hasPermission("territory.command.claim")) {
+            plugin.getMessages().send(p, "no-permission");
+            return;
+        }
         String err = plugin.getTerritories().claim(p);
         if (err == null) {
             double price = plugin.getConfig().getDouble("chunk-price", 2500);
@@ -35,6 +39,10 @@ public final class Actions {
     }
 
     public static void unclaim(TerritoryPlugin plugin, Player p) {
+        if (!p.hasPermission("territory.command.unclaim")) {
+            plugin.getMessages().send(p, "no-permission");
+            return;
+        }
         String err = plugin.getTerritories().unclaim(p);
         if (err != null && err.startsWith("unclaim-success:")) {
             String refund = err.substring(err.indexOf(':') + 1);
@@ -65,13 +73,17 @@ public final class Actions {
      *  数据变更与事件统一走 TerritoryManager.changeMember（与对外 API 同一套规则）。 */
     public static void modifyList(TerritoryPlugin plugin, Player actor, Territory t,
                                   String targetName, boolean add, boolean blacklist) {
+        if (!actor.hasPermission(blacklist ? "territory.command.ban" : "territory.command.trust")) {
+            plugin.getMessages().send(actor, "no-permission");
+            return;
+        }
         TerritoryManager tm = plugin.getTerritories();
         UUID target = tm.resolveUUID(targetName);
         if (target == null) {
             plugin.getMessages().send(actor, "player-not-found", "%name%", targetName);
             return;
         }
-        if (target.equals(actor.getUniqueId()) && !tm.isSuperAdmin(actor.getUniqueId())) {
+        if (target.equals(actor.getUniqueId()) && !tm.isAdmin(actor)) {
             plugin.getMessages().send(actor, "cannot-target-self");
             return;
         }
@@ -123,12 +135,16 @@ public final class Actions {
     /* ========================= 传送 ========================= */
 
     public static void setTp(TerritoryPlugin plugin, Player p) {
+        if (!p.hasPermission("territory.command.settp")) {
+            plugin.getMessages().send(p, "no-permission");
+            return;
+        }
         Territory t = plugin.getTerritories().getAt(p.getLocation());
         if (t == null) {
             plugin.getMessages().send(p, "not-in-territory");
             return;
         }
-        if (!t.isOwner(p.getUniqueId()) && !plugin.getTerritories().isSuperAdmin(p.getUniqueId())) {
+        if (!t.isOwner(p.getUniqueId()) && !plugin.getTerritories().isAdmin(p)) {
             plugin.getMessages().send(p, "not-owner");
             return;
         }
@@ -138,6 +154,10 @@ public final class Actions {
     }
 
     public static void teleport(TerritoryPlugin plugin, Player p, Territory t) {
+        if (!p.hasPermission("territory.command.tp")) {
+            plugin.getMessages().send(p, "no-permission");
+            return;
+        }
         Location target = t.getTpPoint();
         if (target == null) {
             long[] c = centerChunk(t);
@@ -187,6 +207,10 @@ public final class Actions {
     /* ========================= 边界粒子 ========================= */
 
     public static void view(TerritoryPlugin plugin, Player p) {
+        if (!p.hasPermission("territory.command.view")) {
+            plugin.getMessages().send(p, "no-permission");
+            return;
+        }
         Territory t = plugin.getTerritories().getAt(p.getLocation());
         if (t == null) {
             plugin.getMessages().send(p, "view-none");
