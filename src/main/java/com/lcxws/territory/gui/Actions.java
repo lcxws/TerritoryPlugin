@@ -61,7 +61,8 @@ public final class Actions {
 
     /* ========================= 名单管理 ========================= */
 
-    /** 命令与 GUI 共用的黑白名单增删（含解析玩家名、自目标检查、拉黑弹出） */
+    /** 命令与 GUI 共用的黑白名单增删（含解析玩家名、自目标检查、拉黑弹出）；
+     *  数据变更与事件统一走 TerritoryManager.changeMember（与对外 API 同一套规则）。 */
     public static void modifyList(TerritoryPlugin plugin, Player actor, Territory t,
                                   String targetName, boolean add, boolean blacklist) {
         TerritoryManager tm = plugin.getTerritories();
@@ -75,48 +76,33 @@ public final class Actions {
             return;
         }
         String resolvedName = tm.nameFor(target);
+        boolean wasTrusted = blacklist && add && t.getWhitelist().contains(target);
+
+        if (!tm.changeMember(t, target, add, blacklist)) {
+            // 提示与旧行为逐字一致
+            if (blacklist) {
+                plugin.getMessages().send(actor, add ? "trust-already" : "ban-not-found");
+            } else {
+                plugin.getMessages().send(actor, add
+                        ? (t.isBlacklisted(target) ? "trust-is-banned" : "trust-already")
+                        : "trust-not-found");
+            }
+            return;
+        }
+
         if (blacklist) {
             if (add) {
-                if (t.isBlacklisted(target)) {
-                    plugin.getMessages().send(actor, "trust-already");
-                    return;
-                }
-                boolean wasTrusted = t.getWhitelist().remove(target);
-                t.getBlacklist().add(target);
-                tm.markDirty();
                 plugin.getMessages().send(actor, "ban-add", "%player%", resolvedName);
                 if (wasTrusted) {
                     plugin.getMessages().send(actor, "ban-was-trusted");
                 }
                 ejectIfInside(plugin, t, target);
             } else {
-                if (!t.getBlacklist().remove(target)) {
-                    plugin.getMessages().send(actor, "ban-not-found");
-                    return;
-                }
-                tm.markDirty();
                 plugin.getMessages().send(actor, "ban-remove", "%player%", resolvedName);
             }
         } else {
-            if (add) {
-                if (t.isBlacklisted(target)) {
-                    plugin.getMessages().send(actor, "trust-is-banned");
-                    return;
-                }
-                if (!t.getWhitelist().add(target)) {
-                    plugin.getMessages().send(actor, "trust-already");
-                    return;
-                }
-                tm.markDirty();
-                plugin.getMessages().send(actor, "trust-add", "%player%", resolvedName);
-            } else {
-                if (!t.getWhitelist().remove(target)) {
-                    plugin.getMessages().send(actor, "trust-not-found");
-                    return;
-                }
-                tm.markDirty();
-                plugin.getMessages().send(actor, "trust-remove", "%player%", resolvedName);
-            }
+            plugin.getMessages().send(actor, add ? "trust-add" : "trust-remove",
+                    "%player%", resolvedName);
         }
     }
 

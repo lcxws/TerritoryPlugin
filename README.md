@@ -10,7 +10,7 @@
 
 ## 快速开始
 
-1. 把 `TerritoryPlugin-1.3.0.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进 Mohist 服务器的 `plugins` 文件夹。
+1. 把 `TerritoryPlugin-1.4.0.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进 Mohist 服务器的 `plugins` 文件夹。
 2. 首次启动后编辑 `plugins/Territory/config.yml`：
    - 把 `enabled-worlds` 改成你的**主世界名字**（默认 `world`，仅主世界启用领地）；
    - 想让自己越权管理的话，用 `/res admin whoami` 查询自己的 UUID 填进 `superadmins`。
@@ -31,7 +31,7 @@
 
 ```bash
 ./gradlew build
-# 产物: build/libs/TerritoryPlugin-1.3.0.jar
+# 产物: build/libs/TerritoryPlugin-1.4.0.jar
 ```
 
 无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载；本分支数据存储为 YAML，无 SQL 驱动）。
@@ -134,6 +134,29 @@ Landlord / Dominion），本仓库全部代码为原创实现，未复制任何�
 /res admin ...        超级管理命令
 ```
 `/res` 与 `/land` 等效。
+
+## 对外 API（其他插件接入）
+
+其他插件可通过 Bukkit ServicesManager（或 `TerritoryAPIProvider.get()`）读写领地数据：
+
+```java
+TerritoryAPI api = Bukkit.getServicesManager().load(TerritoryAPI.class);
+if (api != null) {
+    TerritoryInfo t = api.getTerritoryAt(player.getLocation());
+    if (t != null && !t.isTrusted(player.getUniqueId())) {
+        player.sendMessage("这是 " + t.getOwnerName() + " 的领地！");
+    }
+}
+```
+
+- **查询**：`getTerritoryAt` / `getTerritory` / `getTerritoriesOf` / `getChunkCount` / `getTerritoryCount`
+- **判断**：`isOwner` / `isTrusted` / `isBlacklisted` / `isModuleEnabled`
+- **名单**：`addTrusted` / `removeTrusted` / `addBlacklisted` / `removeBlacklisted`（黑名单优先规则与命令一致）
+- **管理**：`claimChunk`（免费圈地，供活动/迁移工具）/ `deleteTerritory`
+- **事件**：`TerritoryClaimEvent` / `TerritoryUnclaimEvent` / `TerritoryMemberChangeEvent` / `TerritoryDeleteEvent`（命令、GUI、API 三种入口都会触发）
+
+接入方 `plugin.yml` 加 `softdepend: [Territory]`，编译依赖直接用本插件 jar。
+完整文档与示例见 [API_USAGE_EXAMPLE.md](API_USAGE_EXAMPLE.md)。
 
 ## 性能设计（人少服/轻量化）
 
