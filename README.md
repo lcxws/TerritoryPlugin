@@ -32,8 +32,8 @@
 
 ```bash
 ./gradlew build
-# 发布产物: build/libs/TerritoryPlugin-2.2.0.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
-# 另有:     build/libs/TerritoryPlugin-2.2.0-thin.jar（不含驱动，需自行提供）
+# 发布产物: build/libs/TerritoryPlugin-2.3.0.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
+# 另有:     build/libs/TerritoryPlugin-2.3.0-thin.jar（不含驱动，需自行提供）
 ```
 
 构建时由 Gradle 自动下载 Mohist dev bundle 与两个 SQL 驱动并打进 fat jar，开箱即用。
@@ -97,7 +97,9 @@ Landlord / Dominion），本仓库全部代码为原创实现，未复制任何�
 
 ## 开源协议
 
-[MIT](LICENSE) © 2026 lcxws
+[GNU General Public License v3.0](LICENSE)（GPLv3） © 2026 lcxws
+
+你可以自由使用、修改、再分发本项目；再分发衍生作品时需保留版权声明并以 GPLv3 协议开源。
 
 ## 权限三级模型
 
