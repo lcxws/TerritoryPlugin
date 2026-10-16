@@ -32,8 +32,8 @@
 
 ```bash
 ./gradlew build
-# 发布产物: build/libs/TerritoryPlugin-2.3.0.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
-# 另有:     build/libs/TerritoryPlugin-2.3.0-thin.jar（不含驱动，需自行提供）
+# 发布产物: build/libs/TerritoryPlugin-2.4.0.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
+# 另有:     build/libs/TerritoryPlugin-2.4.0-thin.jar（不含驱动，需自行提供）
 ```
 
 构建时由 Gradle 自动下载 Mohist dev bundle 与两个 SQL 驱动并打进 fat jar，开箱即用。
@@ -136,6 +136,29 @@ Landlord / Dominion），本仓库全部代码为原创实现，未复制任何�
 /res admin ...        超级管理命令
 ```
 `/res` 与 `/land` 等效。
+
+## 对外 API（其他插件接入）
+
+其他插件可通过 Bukkit ServicesManager（或 `TerritoryAPIProvider.get()`）读写领地数据：
+
+```java
+TerritoryAPI api = Bukkit.getServicesManager().load(TerritoryAPI.class);
+if (api != null) {
+    TerritoryInfo t = api.getTerritoryAt(player.getLocation());
+    if (t != null && !t.isTrusted(player.getUniqueId())) {
+        player.sendMessage("这是 " + t.getOwnerName() + " 的领地！");
+    }
+}
+```
+
+- **查询**：`getTerritoryAt` / `getTerritory` / `getTerritoriesOf` / `getChunkCount` / `getTerritoryCount`
+- **判断**：`isOwner` / `isTrusted` / `isBlacklisted` / `isModuleEnabled`
+- **名单**：`addTrusted` / `removeTrusted` / `addBlacklisted` / `removeBlacklisted`（黑名单优先规则与命令一致）
+- **管理**：`claimChunk`（免费圈地，供活动/迁移工具）/ `deleteTerritory`
+- **事件**：`TerritoryClaimEvent` / `TerritoryUnclaimEvent` / `TerritoryMemberChangeEvent` / `TerritoryDeleteEvent`（命令、GUI、API 三种入口都会触发）
+
+接入方 `plugin.yml` 加 `softdepend: [Territory]`，编译依赖直接用本插件 jar。
+完整文档与示例见 [API_USAGE_EXAMPLE.md](API_USAGE_EXAMPLE.md)。
 
 ## 性能设计（人少服/轻量化）
 

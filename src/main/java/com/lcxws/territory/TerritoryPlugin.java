@@ -1,5 +1,7 @@
 package com.lcxws.territory;
 
+import com.lcxws.territory.api.TerritoryAPIImpl;
+import com.lcxws.territory.api.TerritoryAPIProvider;
 import com.lcxws.territory.command.ResCommand;
 import com.lcxws.territory.listener.GuiListener;
 import com.lcxws.territory.listener.MovementListener;
@@ -30,6 +32,7 @@ public class TerritoryPlugin extends JavaPlugin {
     private Messages messages;
     private ResCommand resCommand;
     private GuiListener guiListener;
+    private TerritoryAPIImpl api;
 
     /** /res view 边界粒子任务：玩家 -> 任务 */
     private final Map<UUID, BukkitTask> viewTasks = new ConcurrentHashMap<>();
@@ -45,6 +48,10 @@ public class TerritoryPlugin extends JavaPlugin {
             return;
         }
         economy = new EconomyHook(this);
+
+        // 注册对外 API（ServicesManager 与 TerritoryAPIProvider.get() 均可获取）
+        api = new TerritoryAPIImpl(this);
+        TerritoryAPIProvider.register(this, api);
 
         Bukkit.getPluginManager().registerEvents(new ProtectionListener(this), this);
         Bukkit.getPluginManager().registerEvents(new MovementListener(this), this);
@@ -76,6 +83,7 @@ public class TerritoryPlugin extends JavaPlugin {
 
     @Override
     public void onDisable() {
+        TerritoryAPIProvider.unregister(this);
         HandlerList.unregisterAll((org.bukkit.plugin.Plugin) this);
         Bukkit.getScheduler().cancelTasks(this);
         if (territoryManager != null) {

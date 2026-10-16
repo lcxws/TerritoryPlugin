@@ -2,6 +2,11 @@ package com.lcxws.territory.manager;
 
 import com.lcxws.territory.Territory;
 import com.lcxws.territory.TerritoryPlugin;
+import com.lcxws.territory.api.TerritoryInfo;
+import com.lcxws.territory.api.event.TerritoryClaimEvent;
+import com.lcxws.territory.api.event.TerritoryDeleteEvent;
+import com.lcxws.territory.api.event.TerritoryMemberChangeEvent;
+import com.lcxws.territory.api.event.TerritoryUnclaimEvent;
 import com.lcxws.territory.storage.SqlStorage;
 import com.lcxws.territory.storage.YamlImporter;
 import org.bukkit.Bukkit;
@@ -157,12 +162,8 @@ public class TerritoryManager {
             return "not-enough-money:" + eco.format(price);
         }
 
-        Map<String, Set<Long>> byWorld =
-                ownerChunks.computeIfAbsent(player.getUniqueId(), k -> new HashMap<>());
-        byWorld.computeIfAbsent(world, k -> new HashSet<>())
-                .add(pack(player.getLocation().getBlockX() >> 4, player.getLocation().getBlockZ() >> 4));
-
-        recompute(world, player.getUniqueId());
+        addChunk(player.getUniqueId(), world,
+                player.getLocation().getBlockX() >> 4, player.getLocation().getBlockZ() >> 4);
         return null;
     }
 
@@ -186,6 +187,8 @@ public class TerritoryManager {
         set.remove(packed);
         int chunksBefore = t.getChunks().size();
         boolean hadModules = !t.getPurchased().isEmpty();
+        Bukkit.getPluginManager().callEvent(new TerritoryUnclaimEvent(ownerId, world,
+                unpackX(packed), unpackZ(packed)));
         recompute(world, ownerId);
 
         // 拆分提示：原来是一个连通体，现在变成多个则说明发生了拆分
@@ -302,6 +305,7 @@ public class TerritoryManager {
             if (home.get(t.getId()) == null) {
                 territories.remove(t.getId());
                 removedIds.add(t.getId());
+                fireDeleteEvent(t);
             }
         }
 
@@ -365,12 +369,74 @@ public class TerritoryManager {
         }
         territories.remove(t.getId());
         removedIds.add(t.getId());
+        fireDeleteEvent(t);
     }
 
     /** 管理命令：移除领地中的单个区块（无退款，走合并/拆分逻辑） */
     public void adminRemoveChunk(Territory t, long packed) {
         ownerChunks(t.getOwner(), t.getWorld()).remove(packed);
+        Bukkit.getPluginManager().callEvent(new TerritoryUnclaimEvent(t.getOwner(), t.getWorld(),
+                unpackX(packed), unpackZ(packed)));
         recompute(t.getWorld(), t.getOwner());
+    }
+
+    /* ========================= API 支持（命令 / GUI / 对外 API 共用） ========================= */
+
+    /**
+     * 名单变更核心：纯数据操作 + 脏标记 + 事件（黑名单优先规则与命令完全一致）。
+     * 不发送消息、不弹出玩家，由调用方决定提示。
+     *
+     * @return 是否实际发生变更（已在名单 / 不在名单等无效操作返回 false）
+     */
+    public boolean changeMember(Territory t, UUID player, boolean add, boolean blacklist) {
+        if (t == null || player == null) return false;
+        if (blacklist) {
+            if (add) {
+                if (t.getBlacklist().contains(player)) return false;
+                t.getWhitelist().remove(player);
+                t.getBlacklist().add(player);
+            } else {
+                if (!t.getBlacklist().remove(player)) return false;
+            }
+        } else {
+            if (add) {
+                if (t.getBlacklist().contains(player) || !t.getWhitelist().add(player)) return false;
+            } else {
+                if (!t.getWhitelist().remove(player)) return false;
+            }
+        }
+        markDirty(t);
+        Bukkit.getPluginManager().callEvent(new TerritoryMemberChangeEvent(
+                TerritoryInfo.of(t, nameFor(t.getOwner())), player, add, blacklist));
+        return true;
+    }
+
+    /**
+     * 圈入一个区块：不做经济与数量限制检查（调用方负责），区块已被任何人占领时返回 null。
+     * 相邻自动合并照常生效；成功后触发 TerritoryClaimEvent（脏数据由 recompute 标记）。
+     */
+    public Territory addChunk(UUID owner, String world, int chunkX, int chunkZ) {
+        if (owner == null || world == null) return null;
+        if (getAt(world, chunkX, chunkZ) != null) return null;
+        Set<UUID> before = new HashSet<>();
+        for (Territory t : territories.values()) {
+            if (t.getOwner().equals(owner) && t.getWorld().equals(world)) before.add(t.getId());
+        }
+        ownerChunks(owner, world).add(pack(chunkX, chunkZ));
+        recompute(world, owner);
+        Territory result = getAt(world, chunkX, chunkZ);
+        if (result != null) {
+            Bukkit.getPluginManager().callEvent(new TerritoryClaimEvent(owner,
+                    TerritoryInfo.of(result, nameFor(owner)), world, chunkX, chunkZ,
+                    !before.contains(result.getId())));
+        }
+        return result;
+    }
+
+    /** 领地对象被移除时触发删除事件（快照为移除前的状态） */
+    private void fireDeleteEvent(Territory t) {
+        Bukkit.getPluginManager().callEvent(new TerritoryDeleteEvent(
+                TerritoryInfo.of(t, nameFor(t.getOwner()))));
     }
 
     /* ========================= 超级管理员 ========================= */
