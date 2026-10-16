@@ -1,23 +1,16 @@
 package com.lcxws.territory.manager;
 
-import com.lcxws.territory.Module;
 import com.lcxws.territory.Territory;
 import com.lcxws.territory.TerritoryPlugin;
+import com.lcxws.territory.storage.SqlStorage;
+import com.lcxws.territory.storage.YamlImporter;
 import org.bukkit.Bukkit;
 import org.bukkit.Chunk;
 import org.bukkit.Location;
 import org.bukkit.OfflinePlayer;
-import org.bukkit.World;
-import org.bukkit.configuration.ConfigurationSection;
-import org.bukkit.configuration.file.YamlConfiguration;
 import org.bukkit.entity.Player;
 
 import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -30,7 +23,7 @@ import java.util.Set;
 import java.util.UUID;
 
 /**
- * 领地管理器：区块索引（O(1) 查询）、连通分量合并/拆分、YAML 持久化、异步批量保存。
+ * 领地管理器：区块索引（O(1) 查询）、连通分量合并/拆分、SQL 持久化（脏数据增量写入）。
  */
 public class TerritoryManager {
 
@@ -47,13 +40,17 @@ public class TerritoryManager {
     /** 启用领地的世界 */
     private Set<String> enabledWorlds = new HashSet<>();
 
-    private volatile boolean dirty;
-    private final File dataFile;
-    private final Object ioLock = new Object();
+    /** SQL 存储（SQLite / MySQL） */
+    private SqlStorage storage;
+    /** 待写库的领地 id（主线程维护，保存时快照后清空） */
+    private final Set<UUID> dirtyIds = new HashSet<>();
+    /** 待从库中删除的领地 id */
+    private final Set<UUID> removedIds = new HashSet<>();
+    /** 名字缓存是否有变化 */
+    private boolean namesDirty;
 
     public TerritoryManager(TerritoryPlugin plugin) {
         this.plugin = plugin;
-        this.dataFile = new File(plugin.getDataFolder(), "territories.yml");
         reloadWorlds();
     }
 
@@ -134,7 +131,7 @@ public class TerritoryManager {
 
     /* ========================= 购买 / 放弃 ========================= */
 
-    /** 购买脚下区块。成功返回 null，失败返回已向玩家发送的提示后的 true（此处用错误 key 列表区分） */
+    /** 购买脚下区块。成功返回 null，失败返回错误 key（可带 ":参数" 后缀） */
     public String claim(Player player) {
         String world = player.getWorld().getName();
         if (!isWorldEnabled(world)) return "world-disabled";
@@ -166,7 +163,6 @@ public class TerritoryManager {
                 .add(pack(player.getLocation().getBlockX() >> 4, player.getLocation().getBlockZ() >> 4));
 
         recompute(world, player.getUniqueId());
-        markDirty();
         return null;
     }
 
@@ -191,7 +187,6 @@ public class TerritoryManager {
         int chunksBefore = t.getChunks().size();
         boolean hadModules = !t.getPurchased().isEmpty();
         recompute(world, ownerId);
-        markDirty();
 
         // 拆分提示：原来是一个连通体，现在变成多个则说明发生了拆分
         int compsAfter = countComponents(ownerId, world);
@@ -304,7 +299,10 @@ public class TerritoryManager {
             idx = chunkIndex.computeIfAbsent(world, k -> new HashMap<>());
         }
         for (Territory t : old) {
-            if (home.get(t.getId()) == null) territories.remove(t.getId());
+            if (home.get(t.getId()) == null) {
+                territories.remove(t.getId());
+                removedIds.add(t.getId());
+            }
         }
 
         for (int i = 0; i < comps.size(); i++) {
@@ -349,6 +347,7 @@ public class TerritoryManager {
             }
             rep.getChunks().addAll(comp);
             territories.put(rep.getId(), rep);
+            dirtyIds.add(rep.getId());
             for (Long c : comp) idx.put(c, rep.getId());
         }
     }
@@ -365,14 +364,13 @@ public class TerritoryManager {
             for (Long c : t.getChunks()) idx.remove(c);
         }
         territories.remove(t.getId());
-        markDirty();
+        removedIds.add(t.getId());
     }
 
     /** 管理命令：移除领地中的单个区块（无退款，走合并/拆分逻辑） */
     public void adminRemoveChunk(Territory t, long packed) {
         ownerChunks(t.getOwner(), t.getWorld()).remove(packed);
         recompute(t.getWorld(), t.getOwner());
-        markDirty();
     }
 
     /* ========================= 超级管理员 ========================= */
@@ -420,179 +418,123 @@ public class TerritoryManager {
 
     public void cacheName(UUID uuid, String name) {
         String old = nameCache.put(uuid, name);
-        if (!name.equals(old)) markDirty();
+        if (!name.equals(old)) namesDirty = true;
     }
 
-    /* ========================= 持久化 ========================= */
+    /* ========================= 存储生命周期 ========================= */
+
+    /** 初始化 SQL 存储并载入数据；失败返回 false（调用方应禁用插件） */
+    public boolean initStorage() {
+        storage = new SqlStorage(plugin);
+        if (!storage.init()) return false;
+        load();
+        return true;
+    }
+
+    public void closeStorage() {
+        if (storage != null) storage.close();
+    }
+
+    /* ========================= 持久化（SQL 增量写入） ========================= */
 
     public boolean isDirty() {
-        return dirty;
+        return !dirtyIds.isEmpty() || !removedIds.isEmpty() || namesDirty;
     }
 
-    public void markDirty() {
-        dirty = true;
+    /** 标记单个领地为待写库（名单、模块、传送点等原地修改后调用） */
+    public void markDirty(Territory t) {
+        if (t != null) dirtyIds.add(t.getId());
     }
 
-    /** 序列化当前数据（在主线程调用，避免并发修改） */
-    private String serialize() {
-        YamlConfiguration yaml = new YamlConfiguration();
-        for (Territory t : territories.values()) {
-            String base = "territories." + t.getId();
-            yaml.set(base + ".owner", t.getOwner().toString());
-            yaml.set(base + ".owner-name", nameFor(t.getOwner()));
-            yaml.set(base + ".world", t.getWorld());
-            List<String> chunkList = new ArrayList<>();
-            for (Long c : t.getChunks()) {
-                chunkList.add(unpackX(c) + ":" + unpackZ(c));
-            }
-            yaml.set(base + ".chunks", chunkList);
-            List<String> wl = new ArrayList<>();
-            for (UUID u : t.getWhitelist()) wl.add(u.toString());
-            yaml.set(base + ".whitelist", wl);
-            List<String> bl = new ArrayList<>();
-            for (UUID u : t.getBlacklist()) bl.add(u.toString());
-            yaml.set(base + ".blacklist", bl);
-            List<String> pur = new ArrayList<>();
-            for (Module m : t.getPurchased()) pur.add(m.name());
-            yaml.set(base + ".purchased", pur);
-            List<String> en = new ArrayList<>();
-            for (Module m : t.getEnabled()) en.add(m.name());
-            yaml.set(base + ".enabled", en);
-            if (t.hasTp()) {
-                Location tp = t.getTpPoint();
-                yaml.set(base + ".tp", tp.getX() + "," + tp.getY() + "," + tp.getZ()
-                        + "," + tp.getYaw() + "," + tp.getPitch());
-            }
-            yaml.set(base + ".created", t.getCreated());
+    /** 待保存批次：主线程构建快照，异步线程写库 */
+    private static final class SaveBatch {
+        final List<SqlStorage.TerritoryRow> rows;
+        final Set<UUID> removed;
+        final Map<UUID, String> names;
+
+        SaveBatch(List<SqlStorage.TerritoryRow> rows, Set<UUID> removed, Map<UUID, String> names) {
+            this.rows = rows;
+            this.removed = removed;
+            this.names = names;
         }
-        for (Map.Entry<UUID, String> e : nameCache.entrySet()) {
-            yaml.set("names." + e.getKey(), e.getValue());
-        }
-        return yaml.saveToString();
-    }
 
-    private void writeToFile(String data) {
-        synchronized (ioLock) {
-            try {
-                Path target = dataFile.toPath();
-                Path tmp = dataFile.toPath().resolveSibling("territories.yml.tmp");
-                Files.write(tmp, data.getBytes(StandardCharsets.UTF_8));
-                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING);
-            } catch (IOException ex) {
-                plugin.getLogger().severe("保存领地数据失败: " + ex.getMessage());
-            }
+        boolean isEmpty() {
+            return rows.isEmpty() && removed.isEmpty() && names.isEmpty();
         }
     }
 
-    /** 异步延迟保存：主线程做序列化快照，异步写盘 */
+    /** 主线程快照并清空脏标记 */
+    private SaveBatch buildBatch() {
+        List<SqlStorage.TerritoryRow> rows = new ArrayList<>();
+        for (UUID id : dirtyIds) {
+            Territory t = territories.get(id);
+            if (t != null) rows.add(SqlStorage.TerritoryRow.of(t, nameFor(t.getOwner())));
+        }
+        Set<UUID> removed = new HashSet<>(removedIds);
+        Map<UUID, String> names = namesDirty ? new HashMap<>(nameCache) : Collections.emptyMap();
+        dirtyIds.clear();
+        removedIds.clear();
+        namesDirty = false;
+        return new SaveBatch(rows, removed, names);
+    }
+
+    /** 异步延迟保存：主线程做行快照，异步事务写库（仅脏数据） */
     public void saveAsync() {
-        dirty = false;
-        String data = serialize();
-        Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> writeToFile(data));
+        if (storage == null) return;
+        SaveBatch batch = buildBatch();
+        if (batch.isEmpty()) return;
+        Bukkit.getScheduler().runTaskAsynchronously(plugin,
+                () -> storage.save(batch.rows, batch.removed, batch.names));
     }
 
     /** 关服时的同步保存 */
     public void saveSync() {
-        dirty = false;
-        writeToFile(serialize());
+        if (storage == null) return;
+        SaveBatch batch = buildBatch();
+        if (batch.isEmpty()) return;
+        storage.save(batch.rows, batch.removed, batch.names);
     }
 
+    /** 载入全部数据；数据库为空时自动导入旧版 territories.yml */
     public void load() {
         territories.clear();
         chunkIndex.clear();
         ownerChunks.clear();
         nameCache.clear();
-        if (!dataFile.exists()) return;
+        dirtyIds.clear();
+        removedIds.clear();
+        namesDirty = false;
 
-        YamlConfiguration yaml = YamlConfiguration.loadConfiguration(dataFile);
-        ConfigurationSection names = yaml.getConfigurationSection("names");
-        if (names != null) {
-            for (String key : names.getKeys(false)) {
-                try {
-                    nameCache.put(UUID.fromString(key), names.getString(key));
-                } catch (IllegalArgumentException ignored) {
+        List<Territory> loaded = new ArrayList<>();
+        Map<UUID, String> names = new HashMap<>();
+        storage.load(loaded, names);
+        nameCache.putAll(names);
+
+        // 首次迁移：数据库为空时导入旧版 YAML（原文件保留，确认无误后可手动删除）
+        if (loaded.isEmpty() && plugin.getConfig().getBoolean("storage.import-yaml-if-empty", true)) {
+            File legacy = new File(plugin.getDataFolder(), "territories.yml");
+            if (legacy.exists()) {
+                int n = YamlImporter.importFrom(plugin, legacy, loaded, nameCache);
+                if (n > 0) {
+                    plugin.getLogger().info("已从 territories.yml 导入 " + n
+                            + " 个领地到数据库（原文件保留，确认无误后可手动删除）。");
+                    for (Territory t : loaded) dirtyIds.add(t.getId());
+                    namesDirty = true;
                 }
             }
         }
-        ConfigurationSection secs = yaml.getConfigurationSection("territories");
-        if (secs == null) return;
-        for (String key : secs.getKeys(false)) {
-            UUID id;
-            try {
-                id = UUID.fromString(key);
-            } catch (IllegalArgumentException ex) {
-                plugin.getLogger().warning("跳过非法领地ID: " + key);
-                continue;
-            }
-            String ownerStr = secs.getString(key + ".owner");
-            String world = secs.getString(key + ".world");
-            if (ownerStr == null || world == null) continue;
-            Territory t;
-            try {
-                t = new Territory(id, UUID.fromString(ownerStr), world);
-            } catch (IllegalArgumentException ex) {
-                plugin.getLogger().warning("跳过非法领地数据: " + key);
-                continue;
-            }
-            t.setCreated(secs.getLong(key + ".created", System.currentTimeMillis()));
-            for (String c : secs.getStringList(key + ".chunks")) {
-                String[] parts = c.split(":");
-                if (parts.length == 2) {
-                    try {
-                        t.getChunks().add(pack(Integer.parseInt(parts[0]), Integer.parseInt(parts[1])));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            }
-            if (t.getChunks().isEmpty()) {
-                plugin.getLogger().warning("领地 " + key + " 没有区块，跳过。");
-                continue;
-            }
-            for (String u : secs.getStringList(key + ".whitelist")) {
-                try {
-                    t.getWhitelist().add(UUID.fromString(u));
-                } catch (IllegalArgumentException ignored) {
-                }
-            }
-            for (String u : secs.getStringList(key + ".blacklist")) {
-                try {
-                    t.getBlacklist().add(UUID.fromString(u));
-                } catch (IllegalArgumentException ignored) {
-                }
-            }
-            for (String m : secs.getStringList(key + ".purchased")) {
-                try {
-                    t.getPurchased().add(Module.valueOf(m));
-                } catch (IllegalArgumentException ignored) {
-                }
-            }
-            for (String m : secs.getStringList(key + ".enabled")) {
-                try {
-                    t.getEnabled().add(Module.valueOf(m));
-                } catch (IllegalArgumentException ignored) {
-                }
-            }
-            String tp = secs.getString(key + ".tp");
-            if (tp != null) {
-                String[] p = tp.split(",");
-                if (p.length == 5) {
-                    try {
-                        World w = Bukkit.getWorld(world);
-                        if (w != null) {
-                            t.setTpPoint(new Location(w, Double.parseDouble(p[0]), Double.parseDouble(p[1]),
-                                    Double.parseDouble(p[2]), Float.parseFloat(p[3]), Float.parseFloat(p[4])));
-                        }
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
-            }
-            territories.put(id, t);
-            Map<Long, UUID> idx = chunkIndex.computeIfAbsent(world, k -> new HashMap<>());
-            for (Long c : t.getChunks()) idx.put(c, id);
+
+        for (Territory t : loaded) {
+            territories.put(t.getId(), t);
+            Map<Long, UUID> idx = chunkIndex.computeIfAbsent(t.getWorld(), k -> new HashMap<>());
+            for (Long c : t.getChunks()) idx.put(c, t.getId());
             ownerChunks.computeIfAbsent(t.getOwner(), k -> new HashMap<>())
-                    .computeIfAbsent(world, k -> new HashSet<>())
+                    .computeIfAbsent(t.getWorld(), k -> new HashSet<>())
                     .addAll(t.getChunks());
         }
+
+        // 导入的数据立即写库（异步），避免导入后关服前未落库
+        if (isDirty()) saveAsync();
     }
 
     public Set<String> enabledWorlds() {

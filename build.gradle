@@ -3,7 +3,7 @@ plugins {
 }
 
 group 'com.lcxws'
-version '1.1.1'
+version '2.1.1'
 
 java {
     toolchain {
@@ -19,17 +19,37 @@ tasks.withType(ProcessResources).configureEach {
 }
 
 repositories {
+    // 国内加速镜像（同时代理 Maven Central）
+    maven { url "https://maven.aliyun.com/repository/public" }
     mavenCentral()
     maven { url "https://maven.mohistmc.com/" }
     maven { url "https://papermc.io/repo/repository/maven-public/" }
 }
 
 dependencies {
-    // Mohist 1.20.1 开发包（内含 Bukkit/Spigot API），与 EconomyPlugin 保持一致
+    // Mohist 1.20.1 开发包（内含 Bukkit/Spigot API）
     compileOnly 'com.mohistmc:mohistdev:1.20.1'
-    // EconomyPlugin 通过运行时反射接入（见 manager/EconomyHook），无需编译依赖
+    // SQL 驱动（会被打进最终 fat jar，开箱即用）
+    implementation 'org.xerial:sqlite-jdbc:3.45.3.0'
+    implementation 'com.mysql:mysql-connector-j:8.0.33'
 }
 
+// 瘦 jar（不含驱动），供自行管理依赖的场景使用
 jar {
+    archiveClassifier = 'thin'
+}
+
+// 发布用 fat jar：内含 SQLite + MySQL 驱动
+tasks.register('fatJar', Jar) {
+    group = 'build'
     archiveFileName = "TerritoryPlugin-${version}.jar"
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from sourceSets.main.output
+    from(configurations.runtimeClasspath.collect { it.isDirectory() ? it : zipTree(it) })
+    exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA',
+            'META-INF/MANIFEST.MF', 'module-info.class'
+}
+
+tasks.named('assemble') {
+    dependsOn tasks.named('fatJar')
 }

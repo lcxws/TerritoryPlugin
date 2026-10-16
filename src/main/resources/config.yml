@@ -40,8 +40,33 @@ entry-exit-messages: true
 view-particle-seconds: 30
 view-radius-chunks: 2
 
-# 异步自动保存间隔（秒）。修改数据后约在此间隔后写盘，关服时强制保存
+# 异步自动保存间隔（秒）。修改数据后约在此间隔后写库，关服时强制保存
 autosave-seconds: 5
+
+# ------------------------------------------------------------
+# 数据存储（SQL 版：sqlite 或 mysql，不再使用 territories.yml）
+# ------------------------------------------------------------
+storage:
+  # sqlite：单文件数据库，零运维（推荐小服务器）
+  # mysql ：供跨服共享 / 集中管理 / phpMyAdmin 等网页工具浏览；
+  #         需自行先建库，建议：
+  #         CREATE DATABASE territory CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+  type: sqlite
+
+  # SQLite 参数（type: sqlite 时生效；数据库文件位于 plugins/Territory/ 下）
+  sqlite:
+    file: "territories.db"
+
+  # MySQL 参数（type: mysql 时生效）
+  mysql:
+    host: "localhost"
+    port: 3306
+    database: "territory"
+    user: "root"
+    password: ""
+
+  # 数据库为空且检测到旧版 territories.yml 时自动导入（原文件保留，确认无误后可手动删除）
+  import-yaml-if-empty: true
 
 # ------------------------------------------------------------
 # 超级管理员（可越权管理任何领地）

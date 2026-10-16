@@ -39,7 +39,11 @@ public class TerritoryPlugin extends JavaPlugin {
         saveDefaultConfig();
         messages = new Messages(this);
         territoryManager = new TerritoryManager(this);
-        territoryManager.load();
+        if (!territoryManager.initStorage()) {
+            getLogger().severe("数据存储初始化失败，插件已自动禁用。请检查 config.yml 的 storage 配置。");
+            Bukkit.getPluginManager().disablePlugin(this);
+            return;
+        }
         economy = new EconomyHook(this);
 
         Bukkit.getPluginManager().registerEvents(new ProtectionListener(this), this);
@@ -73,8 +77,9 @@ public class TerritoryPlugin extends JavaPlugin {
     public void onDisable() {
         HandlerList.unregisterAll((org.bukkit.plugin.Plugin) this);
         Bukkit.getScheduler().cancelTasks(this);
-        if (territoryManager != null && economy != null) {
-            territoryManager.saveSync();
+        if (territoryManager != null) {
+            territoryManager.saveSync(); // 关服强制同步保存
+            territoryManager.closeStorage();
         }
     }
 

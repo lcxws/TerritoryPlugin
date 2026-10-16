@@ -83,7 +83,7 @@ public final class Actions {
                 }
                 boolean wasTrusted = t.getWhitelist().remove(target);
                 t.getBlacklist().add(target);
-                tm.markDirty();
+                tm.markDirty(t);
                 plugin.getMessages().send(actor, "ban-add", "%player%", resolvedName);
                 if (wasTrusted) {
                     plugin.getMessages().send(actor, "ban-was-trusted");
@@ -94,7 +94,7 @@ public final class Actions {
                     plugin.getMessages().send(actor, "ban-not-found");
                     return;
                 }
-                tm.markDirty();
+                tm.markDirty(t);
                 plugin.getMessages().send(actor, "ban-remove", "%player%", resolvedName);
             }
         } else {
@@ -107,14 +107,14 @@ public final class Actions {
                     plugin.getMessages().send(actor, "trust-already");
                     return;
                 }
-                tm.markDirty();
+                tm.markDirty(t);
                 plugin.getMessages().send(actor, "trust-add", "%player%", resolvedName);
             } else {
                 if (!t.getWhitelist().remove(target)) {
                     plugin.getMessages().send(actor, "trust-not-found");
                     return;
                 }
-                tm.markDirty();
+                tm.markDirty(t);
                 plugin.getMessages().send(actor, "trust-remove", "%player%", resolvedName);
             }
         }
@@ -147,7 +147,7 @@ public final class Actions {
             return;
         }
         t.setTpPoint(p.getLocation());
-        plugin.getTerritories().markDirty();
+        plugin.getTerritories().markDirty(t);
         plugin.getMessages().send(p, "settp-success");
     }
 

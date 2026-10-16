@@ -375,7 +375,7 @@ public class GuiListener implements Listener {
                 t.getEnabled().add(m);
                 plugin.getMessages().send(p, "module-toggle-on", "%module%", m.display);
             }
-            plugin.getTerritories().markDirty();
+            plugin.getTerritories().markDirty(t);
             p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_PLING, 0.6f, 1.4f);
             inv.setItem(slotOf(m), buildModuleItem(t, m));
             inv.setItem(4, buildInfoItem(p, t));
@@ -392,7 +392,7 @@ public class GuiListener implements Listener {
         }
         t.getPurchased().add(m);
         t.getEnabled().add(m);
-        plugin.getTerritories().markDirty();
+        plugin.getTerritories().markDirty(t);
         plugin.getMessages().send(p, "module-buy-success",
                 "%module%", m.display, "%price%", plugin.getEconomy().format(price));
         p.playSound(p.getLocation(), Sound.ENTITY_EXPERIENCE_ORB_PICKUP, 0.9f, 1.2f);

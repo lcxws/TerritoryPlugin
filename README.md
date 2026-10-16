@@ -5,6 +5,10 @@
 相邻区块自动合并；进阶保护通过 GUI 自行购买开启；
 **OP 互不侵犯**——OP 不能动其他人的领地，只有 config 里的超级管理员名单和控制台能越权。
 
+> **📌 本分支（`sql`）为 SQL 存储版（2.x）**：数据存储使用 **SQLite / MySQL**（增量写入、事务保护，
+> 可选跨服共享与 phpMyAdmin 浏览）。`main` 分支（1.x）为 YAML 版。两个分支**玩法、命令、GUI 完全一致**，
+> 仅存储方式与构建产物不同；从 YAML 版升级会自动迁移（见下文「数据存储」）。
+
 ## 快速开始
 
 1. 把 `TerritoryPlugin-1.0.0.jar` 和 `EconomyPlugin` 一起放进 Mohist 服务器的 `plugins` 文件夹。
@@ -23,10 +27,11 @@
 
 ```bash
 ./gradlew build
-# 产物: build/libs/TerritoryPlugin-1.0.0.jar
+# 发布产物: build/libs/TerritoryPlugin-2.1.1.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
+# 另有:     build/libs/TerritoryPlugin-2.1.1-thin.jar（不含驱动，需自行提供）
 ```
 
-无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载）。
+构建时由 Gradle 自动下载 Mohist dev bundle 与两个 SQL 驱动并打进 fat jar，开箱即用。
 
 ## GUI 主菜单（/res）
 
@@ -129,9 +134,23 @@ Landlord / Dominion），本仓库全部代码为原创实现，未复制任何�
 
 - **O(1) 快速路径**：所有保护检查先查 `世界→区块→领地` 的 HashMap 索引，无领地直接放行；
 - **移动事件**只在跨区块边界时才做查找，转头/微动零开销；
-- **YAML 单文件存储**（`territories.yml`），改动后约 5 秒异步批量写盘（主线程零 IO），关服强制同步保存；
-- 无数据库、无网络依赖，插件本体约 50KB。
+- **SQL 增量写入**（SQLite / MySQL）：每次保存只写"脏"领地（每块一条 UPDATE/INSERT + 子树重建，事务包裹），
+  不整库重写；主线程零 IO，关服强制同步保存；
+- 运行时查询不碰数据库：全部走内存 O(1) 索引，SQLite 带 busy_timeout，MySQL 长连接自动重连。
 
-## 数据文件
+## 数据存储（SQL）
 
-`plugins/Territory/territories.yml`：领地、名单、模块、传送点全部在此，可手动备份/编辑（改完 `/res admin reload` 前先停服）。
+| 表 | 内容 |
+|----|------|
+| `territory_data` | 领地基本信息（主人 / 所属世界 / 创建时间 / 传送点） |
+| `territory_chunks` | 领地包含的区块坐标 |
+| `territory_members` | 成员：`role=W` 白名单，`role=B` 黑名单 |
+| `territory_modules` | 已购/开启的进阶保护模块 |
+| `territory_names` | UUID → 玩家名缓存（便于人工查阅） |
+
+- 默认 `storage.type: sqlite`：数据库即 `plugins/Territory/territories.db`，零运维、零外部依赖；
+- 改为 `mysql` 后可跨服共享 / 集中管理 / 用 phpMyAdmin 等网页工具浏览；
+  需自行先建库（建议 `CREATE DATABASE territory CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;`）；
+- **从 1.x（YAML 版）升级**：数据库为空且检测到旧版 `territories.yml` 时，会自动导入一次
+  （原文件保留，确认无误后可手动删除）；
+- SQLite 备份：停服后直接复制 `territories.db` 一个文件即可。
