@@ -1,9 +1,9 @@
 name: Territory
-version: 1.4.0
+version: 1.4.1
 main: com.lcxws.territory.TerritoryPlugin
 api-version: '1.20'
 authors: [Lcxws]
-description: 轻量级区块领地插件（Mohist 1.20.1），按区块购买圈地，支持黑/白名单与进阶保护模块。
+description: 轻量级区块领地插件（Bukkit 1.20–1.21.x），按区块购买圈地，支持黑/白名单与进阶保护模块。
 softdepend:
   - EconomyPlugin
   - Vault

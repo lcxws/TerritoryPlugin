@@ -1,16 +1,18 @@
 # TerritoryPlugin 领地插件
 
-轻量级**区块制领地插件**，面向 Mohist 1.20.1（BukkitAPI）小人数服务器。
+轻量级**区块制领地插件**，面向 **Bukkit 系服务端 1.20 ～ 1.21.x**（Spigot / Paper / Mohist 等）小人数服务器。
 **全 GUI 化操作**：输入 `/res` 打开领地菜单，圈地、放弃、保护模块、白/黑名单、传送全部点选完成；
 相邻区块自动合并；进阶保护通过 GUI 自行购买开启；
 **OP 互不侵犯**——OP 不能动其他人的领地，只有 config 里的超级管理员名单和控制台能越权。
+
+> **版本兼容**：1.20 ～ 1.21.x 全系列（含 1.20.5+ 的 API 改名适配），已在 1.21.1 API 上通过编译兼容性验证；不支持的：Folia（区域化调度）与 1.19 及更老版本。
 
 > **📌 SQL 存储版（SQLite / MySQL）已发布于 [`sql` 分支](https://github.com/lcxws/TerritoryPlugin/tree/sql)**
 > （玩法、命令、GUI 与本分支完全一致，仅存储方式不同；支持从本分支数据自动迁移）。
 
 ## 快速开始
 
-1. 把 `TerritoryPlugin-1.4.0.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进 Mohist 服务器的 `plugins` 文件夹。
+1. 把 `TerritoryPlugin-1.4.1.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进服务端的 `plugins` 文件夹。
 2. 首次启动后编辑 `plugins/Territory/config.yml`：
    - 把 `enabled-worlds` 改成你的**主世界名字**（默认 `world`，仅主世界启用领地）；
    - 想让自己越权管理的话，用 `/res admin whoami` 查询自己的 UUID 填进 `superadmins`。
@@ -31,7 +33,7 @@
 
 ```bash
 ./gradlew build
-# 产物: build/libs/TerritoryPlugin-1.4.0.jar
+# 产物: build/libs/TerritoryPlugin-1.4.1.jar
 ```
 
 无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载；本分支数据存储为 YAML，无 SQL 驱动）。
