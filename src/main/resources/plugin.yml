@@ -1,11 +1,12 @@
 name: Territory
-version: 2.1.1
+version: 2.2.0
 main: com.lcxws.territory.TerritoryPlugin
 api-version: '1.20'
 authors: [Lcxws]
 description: 轻量级区块领地插件（Mohist 1.20.1，SQL 存储版），按区块购买圈地，支持黑/白名单与进阶保护模块。
 softdepend:
   - EconomyPlugin
+  - Vault
 
 commands:
   res:

@@ -18,8 +18,13 @@
 3. 重启或执行 `/res admin reload`。
 4. 游戏内输入 `/res` 即可开始使用（所有功能都有 GUI，命令仅作快捷方式保留）。
 
-经济系统通过**运行时反射**接入 [EconomyPlugin](https://github.com/lcxws/EconomyPlugin) 的 ServicesManager 服务（`EconomyAPI`），
-未安装经济插件时保护功能不受影响，仅购买功能不可用。
+经济系统按以下优先级**运行时接入**（均为反射调用，无编译依赖）：
+
+1. [EconomyPlugin](https://github.com/lcxws/EconomyPlugin) 的 ServicesManager 服务（`EconomyAPI`，优选）；
+2. **Vault**（`net.milkbowl.vault.economy.Economy` 服务）—— 兼容 EssentialsX / CMI 等一切
+   实现了 Vault 的经济插件。
+
+两者都没有时保护功能不受影响，仅购买/退款不可用（会给出明确提示）。
 
 ## 从源码构建
 
@@ -27,8 +32,8 @@
 
 ```bash
 ./gradlew build
-# 发布产物: build/libs/TerritoryPlugin-2.1.1.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
-# 另有:     build/libs/TerritoryPlugin-2.1.1-thin.jar（不含驱动，需自行提供）
+# 发布产物: build/libs/TerritoryPlugin-2.2.0.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
+# 另有:     build/libs/TerritoryPlugin-2.2.0-thin.jar（不含驱动，需自行提供）
 ```
 
 构建时由 Gradle 自动下载 Mohist dev bundle 与两个 SQL 驱动并打进 fat jar，开箱即用。
