@@ -5,17 +5,25 @@
 相邻区块自动合并；进阶保护通过 GUI 自行购买开启；
 **OP 互不侵犯**——OP 不能动其他人的领地，只有 config 里的超级管理员名单和控制台能越权。
 
+> **📌 SQL 存储版（SQLite / MySQL）已发布于 [`sql` 分支](https://github.com/lcxws/TerritoryPlugin/tree/sql)**
+> （玩法、命令、GUI 与本分支完全一致，仅存储方式不同；支持从本分支数据自动迁移）。
+
 ## 快速开始
 
-1. 把 `TerritoryPlugin-1.0.0.jar` 和 `EconomyPlugin` 一起放进 Mohist 服务器的 `plugins` 文件夹。
+1. 把 `TerritoryPlugin-1.2.0.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进 Mohist 服务器的 `plugins` 文件夹。
 2. 首次启动后编辑 `plugins/Territory/config.yml`：
    - 把 `enabled-worlds` 改成你的**主世界名字**（默认 `world`，仅主世界启用领地）；
    - 想让自己越权管理的话，用 `/res admin whoami` 查询自己的 UUID 填进 `superadmins`。
 3. 重启或执行 `/res admin reload`。
 4. 游戏内输入 `/res` 即可开始使用（所有功能都有 GUI，命令仅作快捷方式保留）。
 
-经济系统通过**运行时反射**接入 [EconomyPlugin](https://github.com/lcxws/EconomyPlugin) 的 ServicesManager 服务（`EconomyAPI`），
-未安装经济插件时保护功能不受影响，仅购买功能不可用。
+经济系统按以下优先级**运行时接入**（均为反射调用，无编译依赖）：
+
+1. [EconomyPlugin](https://github.com/lcxws/EconomyPlugin) 的 ServicesManager 服务（`EconomyAPI`，优选）；
+2. **Vault**（`net.milkbowl.vault.economy.Economy` 服务）—— 兼容 EssentialsX / CMI 等一切
+   实现了 Vault 的经济插件。
+
+两者都没有时保护功能不受影响，仅购买/退款不可用（会给出明确提示）。
 
 ## 从源码构建
 
@@ -23,10 +31,10 @@
 
 ```bash
 ./gradlew build
-# 产物: build/libs/TerritoryPlugin-1.0.0.jar
+# 产物: build/libs/TerritoryPlugin-1.2.0.jar
 ```
 
-无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载）。
+无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载；本分支数据存储为 YAML，无 SQL 驱动）。
 
 ## GUI 主菜单（/res）
 

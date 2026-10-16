@@ -48,11 +48,12 @@ public class TerritoryPlugin extends JavaPlugin {
         Bukkit.getPluginManager().registerEvents(guiListener, this);
         Bukkit.getPluginManager().registerEvents(new SessionListener(), this);
 
-        // EconomyPlugin 晚于本插件启动时自动接入
+        // EconomyPlugin / Vault 晚于本插件启动时自动接入
         Bukkit.getPluginManager().registerEvents(new Listener() {
             @EventHandler
             public void onPluginEnable(PluginEnableEvent event) {
-                if (event.getPlugin().getName().equals(EconomyHook.PLUGIN_NAME)) {
+                String name = event.getPlugin().getName();
+                if (name.equals(EconomyHook.PLUGIN_NAME) || name.equals(EconomyHook.VAULT_NAME)) {
                     economy.hook();
                 }
             }

@@ -63,7 +63,7 @@ messages:
   world-disabled: "&c当前世界未启用领地系统。"
   already-own: "&e这个区块已经是你的领地了。"
   owned-by-other: "&c这个区块已被 &e%owner% &c的领地占据。"
-  no-economy: "&c经济插件未安装或未就绪，无法进行购买。"
+  no-economy: "&c经济不可用：请安装 EconomyPlugin 或任意 Vault 兼容经济插件（如 EssentialsX）。"
   not-enough-money: "&c余额不足！需要 &e%need%&c。"
   max-chunks: "&c你已达到区块数量上限（&e%max%&c）。"
   claim-success: "&a成功购买区块！花费 &e%cost%&a，余额 &e%balance%&a。相邻区块会自动合并。"
