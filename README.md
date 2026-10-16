@@ -1,9 +1,11 @@
 # TerritoryPlugin 领地插件
 
-轻量级**区块制领地插件**，面向 Mohist 1.20.1（BukkitAPI）小人数服务器。
+轻量级**区块制领地插件**，面向 **Bukkit 系服务端 1.20 ～ 1.21.x**（Spigot / Paper / Mohist 等）小人数服务器。
 **全 GUI 化操作**：输入 `/res` 打开领地菜单，圈地、放弃、保护模块、白/黑名单、传送全部点选完成；
 相邻区块自动合并；进阶保护通过 GUI 自行购买开启；
 **OP 互不侵犯**——OP 不能动其他人的领地，只有 config 里的超级管理员名单和控制台能越权。
+
+> **版本兼容**：1.20 ～ 1.21.x 全系列（含 1.20.5+ 的 API 改名适配），已在 1.21.1 API 上通过编译兼容性验证；不支持的：Folia（区域化调度）与 1.19 及更老版本。
 
 > **📌 本分支（`sql`）为 SQL 存储版（2.x）**：数据存储使用 **SQLite / MySQL**（增量写入、事务保护，
 > 可选跨服共享与 phpMyAdmin 浏览）。`main` 分支（1.x）为 YAML 版。两个分支**玩法、命令、GUI 完全一致**，
@@ -32,8 +34,8 @@
 
 ```bash
 ./gradlew build
-# 发布产物: build/libs/TerritoryPlugin-2.4.0.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
-# 另有:     build/libs/TerritoryPlugin-2.4.0-thin.jar（不含驱动，需自行提供）
+# 发布产物: build/libs/TerritoryPlugin-2.4.1.jar（fat jar，内含 SQLite + MySQL 驱动，约 17MB）
+# 另有:     build/libs/TerritoryPlugin-2.4.1-thin.jar（不含驱动，需自行提供）
 ```
 
 构建时由 Gradle 自动下载 Mohist dev bundle 与两个 SQL 驱动并打进 fat jar，开箱即用。
