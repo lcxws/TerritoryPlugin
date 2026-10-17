@@ -159,6 +159,12 @@ public final class Actions {
             return;
         }
         Location target = t.getTpPoint();
+        // 防御：传送点必须位于该领地内。若传送点所在区块已被放弃/拆分出去（含历史数据），
+        // 忽略该传送点并回退到领地中心，避免把玩家传到已放弃的地块。
+        if (target != null && !t.getChunks().contains(
+                TerritoryManager.pack(target.getBlockX() >> 4, target.getBlockZ() >> 4))) {
+            target = null;
+        }
         if (target == null) {
             long[] c = centerChunk(t);
             World world = Bukkit.getWorld(t.getWorld());
