@@ -12,7 +12,7 @@
 
 ## 快速开始
 
-1. 把 `TerritoryPlugin-1.5.0.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进服务端的 `plugins` 文件夹。
+1. 把 `TerritoryPlugin-1.5.1.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进服务端的 `plugins` 文件夹。
 2. 首次启动后编辑 `plugins/Territory/config.yml`：
    - 把 `enabled-worlds` 改成你的**主世界名字**（默认 `world`，仅主世界启用领地）；
    - 想让自己越权管理的话，用 `/res admin whoami` 查询自己的 UUID 填进 `superadmins`。
@@ -33,7 +33,7 @@
 
 ```bash
 ./gradlew build
-# 产物: build/libs/TerritoryPlugin-1.5.0.jar
+# 产物: build/libs/TerritoryPlugin-1.5.1.jar
 ```
 
 无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载；本分支数据存储为 YAML，无 SQL 驱动）。

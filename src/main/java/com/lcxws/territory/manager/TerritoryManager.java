@@ -353,6 +353,13 @@ public class TerritoryManager {
                 }
             }
             rep.getChunks().addAll(comp);
+            // 传送点必须位于该领地内：放弃/拆分后若传送点所在区块已不在领地中，清空传送点
+            if (rep.hasTp()) {
+                Location tp = rep.getTpPoint();
+                if (!comp.contains(pack(tp.getBlockX() >> 4, tp.getBlockZ() >> 4))) {
+                    rep.setTpPoint(null);
+                }
+            }
             territories.put(rep.getId(), rep);
             for (Long c : comp) idx.put(c, rep.getId());
         }
