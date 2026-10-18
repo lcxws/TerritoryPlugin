@@ -2,8 +2,10 @@ package com.lcxws.territory;
 
 import org.bukkit.Location;
 
+import java.util.ArrayList;
 import java.util.EnumSet;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,6 +23,8 @@ public class Territory {
     private final Set<UUID> blacklist = new HashSet<>();
     private final Set<Module> purchased = EnumSet.noneOf(Module.class);
     private final Set<Module> enabled = EnumSet.noneOf(Module.class);
+    /** 交互链接：源方块可以在领地外，目标方块必须在本领地内 */
+    private final List<InteractionLink> links = new ArrayList<>();
     private Location tpPoint;
     private long created;
 
@@ -61,6 +65,10 @@ public class Territory {
 
     public Set<Module> getEnabled() {
         return enabled;
+    }
+
+    public List<InteractionLink> getLinks() {
+        return links;
     }
 
     public Location getTpPoint() {

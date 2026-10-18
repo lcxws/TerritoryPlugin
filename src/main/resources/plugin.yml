@@ -1,9 +1,9 @@
 name: Territory
-version: 1.6.0
+version: 1.7.0-beta
 main: com.lcxws.territory.TerritoryPlugin
 api-version: '1.20'
 authors: [Lcxws]
-description: 轻量级区块领地插件（Bukkit 1.20–1.21.x），按区块购买圈地，支持黑/白名单与进阶保护模块。
+description: 轻量级区块领地插件（Bukkit 1.20–1.21.x），按区块购买圈地，支持黑/白名单、进阶保护模块与交互链接。
 softdepend:
   - EconomyPlugin
   - Vault
@@ -41,6 +41,9 @@ permissions:
     default: true
   territory.command.view:
     description: 允许 /res view 显示领地边界粒子
+    default: true
+  territory.command.link:
+    description: 允许 /res link 管理领地交互链接（远程开关门）
     default: true
   territory.admin:
     description: 允许 /res admin 管理命令（等同 config 超管名单，默认关闭）

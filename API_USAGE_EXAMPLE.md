@@ -17,7 +17,7 @@ softdepend:
 
 把 TerritoryPlugin 的 release jar 加入你的工程 classpath（本插件未发布到 Maven 仓库）：
 
-- Gradle：`compileOnly files('libs/TerritoryPlugin-1.4.0.jar')`
+- Gradle：`compileOnly files('libs/TerritoryPlugin-1.7.0-beta.jar')`
 - Maven：将 jar 用 `mvn install:install-file` 装入本地仓库后以 `provided` 引用
 
 ---
@@ -71,6 +71,20 @@ int chunks = territory.getChunkCount(player.getUniqueId());
 
 // 模块状态（如：该领地是否开了禁用PvP）
 boolean noPvp = territory.isModuleEnabled(t.getId(), Module.PVP);
+```
+
+### 查询交互链接
+
+```java
+import com.lcxws.territory.api.TerritoryLinkInfo;
+
+List<TerritoryLinkInfo> links = territory.getLinks(t.getId());
+for (TerritoryLinkInfo link : links) {
+    boolean isPublic = link.isPublic();
+    int autoClose = link.getAutoCloseSeconds();
+    Location source = link.getSourceLocation(); // 世界未加载时可能为 null
+    Location target = link.getTargetLocation();
+}
 ```
 
 ### 遍历领地内的区块
@@ -128,9 +142,20 @@ public void onUnclaim(TerritoryUnclaimEvent e) { /* 区块被放弃/被管理移
 
 @EventHandler
 public void onDelete(TerritoryDeleteEvent e) { /* 领地被整体删除 */ }
+
+@EventHandler
+public void onLinkUse(TerritoryLinkUseEvent e) {
+    // 交互链接执行开关门之前触发；可取消，阻止本次操作
+    Player player = e.getPlayer();
+    TerritoryLinkInfo link = e.getLink();
+    if (/* 自定义条件 */ false) {
+        e.setCancelled(true);
+    }
+}
 ```
 
 事件在变更**生效后**触发（不可取消）；命令、GUI、API 三种入口均会触发，不会漏。
+`TerritoryLinkUseEvent` 是例外：它在开关门**之前**触发，**可取消**。
 
 ---
 
@@ -146,6 +171,7 @@ public void onDelete(TerritoryDeleteEvent e) { /* 领地被整体删除 */ }
 | `getTerritoriesOf(UUID)` | 玩家名下全部领地（按创建时间排序） |
 | `getChunkCount(UUID)` | 玩家区块总数（跨世界） |
 | `getTerritoryCount()` | 全服领地总数 |
+| `getLinks(UUID)` | 某领地的交互链接列表（`TerritoryLinkInfo` 快照） |
 
 ### 判断 / 名单 / 管理
 
@@ -159,7 +185,8 @@ public void onDelete(TerritoryDeleteEvent e) { /* 领地被整体删除 */ }
 
 ### 事件
 
-`TerritoryClaimEvent` / `TerritoryUnclaimEvent` / `TerritoryMemberChangeEvent` / `TerritoryDeleteEvent`（包 `com.lcxws.territory.api.event`）
+`TerritoryClaimEvent` / `TerritoryUnclaimEvent` / `TerritoryMemberChangeEvent` / `TerritoryDeleteEvent` /
+`TerritoryLinkUseEvent`（可取消；包 `com.lcxws.territory.api.event`）
 
 ---
 

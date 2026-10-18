@@ -1,11 +1,14 @@
 package com.lcxws.territory.command;
 
+import com.lcxws.territory.BlockKey;
+import com.lcxws.territory.InteractionLink;
 import com.lcxws.territory.Module;
 import com.lcxws.territory.Territory;
 import com.lcxws.territory.TerritoryPlugin;
 import com.lcxws.territory.gui.Actions;
 import com.lcxws.territory.manager.TerritoryManager;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
@@ -26,9 +29,11 @@ public class ResCommand implements CommandExecutor, TabCompleter {
 
     private static final List<String> PLAYER_SUBS = List.of(
             "claim", "unclaim", "info", "list", "tp", "settp",
-            "trust", "untrust", "ban", "unban", "gui", "view", "admin");
+            "trust", "untrust", "ban", "unban", "gui", "view", "link", "admin");
     private static final List<String> ADMIN_SUBS = List.of(
             "whoami", "reload", "list", "info", "delete", "deletechunk");
+    private static final List<String> LINK_SUBS = List.of(
+            "add", "list", "remove", "mode", "enable", "disable", "cancel");
 
     private final TerritoryPlugin plugin;
 
@@ -70,6 +75,7 @@ public class ResCommand implements CommandExecutor, TabCompleter {
             case "ban" -> modifyList(p, args, true, true);
             case "unban" -> modifyList(p, args, false, true);
             case "view" -> Actions.view(plugin, p);
+            case "link" -> linkCommand(p, args);
             case "admin" -> adminCommand(sender, p, args);
             default -> help(p);
         }
@@ -97,6 +103,147 @@ public class ResCommand implements CommandExecutor, TabCompleter {
             return;
         }
         Actions.modifyList(plugin, p, t, args[1], add, blacklist);
+    }
+
+    /* ========================= 交互链接 ========================= */
+
+    private void linkCommand(Player p, String[] args) {
+        if (args.length < 2) {
+            linkUsage(p);
+            return;
+        }
+        String action = args[1].toLowerCase();
+        if (action.equals("add")) {
+            plugin.getLinkListener().beginSelection(p);
+            return;
+        }
+        if (action.equals("cancel")) {
+            plugin.getLinkListener().cancelSelection(p, true);
+            return;
+        }
+
+        Territory t = linkTerritory(p);
+        if (t == null) return;
+        List<InteractionLink> links = t.getLinks();
+
+        switch (action) {
+            case "list" -> listLinks(p, t);
+            case "remove" -> {
+                int index = parseLinkIndex(p, args, links);
+                if (index < 0) return;
+                InteractionLink link = links.get(index);
+                plugin.getTerritories().removeLink(link);
+                plugin.getMessages().send(p, "link-removed", "%link%", formatLink(link));
+            }
+            case "mode" -> {
+                if (args.length < 4) {
+                    linkUsage(p);
+                    return;
+                }
+                int index = parseLinkIndex(p, args, links);
+                if (index < 0) return;
+                String modeName = args[3].toLowerCase();
+                InteractionLink.Mode mode = modeName.equals("public") ? InteractionLink.Mode.PUBLIC
+                        : modeName.equals("trusted") ? InteractionLink.Mode.TRUSTED : null;
+                if (mode == null) {
+                    plugin.getMessages().send(p, "link-mode-invalid");
+                    return;
+                }
+                InteractionLink link = links.get(index);
+                link.setMode(mode);
+                plugin.getTerritories().markDirty();
+                plugin.getMessages().send(p, mode == InteractionLink.Mode.PUBLIC
+                        ? "link-mode-public" : "link-mode-trusted");
+                if (mode == InteractionLink.Mode.PUBLIC) warnPublic(p, link);
+            }
+            case "enable", "disable" -> {
+                int index = parseLinkIndex(p, args, links);
+                if (index < 0) return;
+                InteractionLink link = links.get(index);
+                link.setEnabled(action.equals("enable"));
+                plugin.getTerritories().markDirty();
+                plugin.getMessages().send(p, link.isEnabled() ? "link-enabled" : "link-disabled-state",
+                        "%link%", formatLink(link));
+            }
+            default -> linkUsage(p);
+        }
+    }
+
+    private Territory linkTerritory(Player p) {
+        Territory t = plugin.getTerritories().getAt(p.getLocation());
+        if (t == null) {
+            plugin.getMessages().send(p, "not-in-territory");
+            return null;
+        }
+        if (!t.isOwner(p.getUniqueId())) {
+            plugin.getMessages().send(p, "not-owner");
+            return null;
+        }
+        return t;
+    }
+
+    private int parseLinkIndex(Player p, String[] args, List<InteractionLink> links) {
+        if (args.length < 3) {
+            linkUsage(p);
+            return -1;
+        }
+        int index;
+        try {
+            index = Integer.parseInt(args[2]);
+        } catch (NumberFormatException ex) {
+            plugin.getMessages().send(p, "link-bad-index");
+            return -1;
+        }
+        if (index < 1 || index > links.size()) {
+            plugin.getMessages().send(p, "link-bad-index");
+            return -1;
+        }
+        return index - 1;
+    }
+
+    private void listLinks(Player p, Territory t) {
+        List<InteractionLink> links = t.getLinks();
+        if (links.isEmpty()) {
+            plugin.getMessages().send(p, "link-none");
+            return;
+        }
+        plugin.getMessages().sendPlain(p, "link-list-header");
+        int i = 1;
+        for (InteractionLink link : links) {
+            plugin.getMessages().send(p, "link-list-item",
+                    "%index%", String.valueOf(i++),
+                    "%source%", formatKey(link.getSource()),
+                    "%target%", formatKey(link.getTarget()),
+                    "%mode%", link.getMode().display,
+                    "%auto%", link.getAutoCloseSeconds() > 0 ? link.getAutoCloseSeconds() + "秒" : "手动",
+                    "%status%", link.isEnabled() ? "启用" : "停用");
+        }
+    }
+
+    private void warnPublic(Player p, InteractionLink link) {
+        plugin.getMessages().send(p, "link-public-warn");
+        Location loc = link.getSource().toLocation();
+        if (loc != null && plugin.getTerritories().getAt(loc) != null) {
+            plugin.getMessages().send(p, "link-public-source-claimed");
+        }
+    }
+
+    private void linkUsage(Player p) {
+        p.sendMessage("§6===== 交互链接 =====");
+        p.sendMessage("§e/res link add §7- 右键外部按钮/拉杆，再右键领地内的门");
+        p.sendMessage("§e/res link list §7- 查看当前领地的链接");
+        p.sendMessage("§e/res link remove <序号> §7- 删除链接");
+        p.sendMessage("§e/res link mode <序号> <public|trusted> §7- 切换权限");
+        p.sendMessage("§e/res link enable|disable <序号> §7- 启用/停用");
+        p.sendMessage("§e/res link cancel §7- 取消当前绑定选择");
+    }
+
+    private static String formatKey(BlockKey key) {
+        return key.getWorld() + " " + key.getX() + "," + key.getY() + "," + key.getZ();
+    }
+
+    private static String formatLink(InteractionLink link) {
+        return formatKey(link.getSource()) + " -> " + formatKey(link.getTarget());
     }
 
     /* ========================= 信息 / 列表 ========================= */
@@ -325,6 +472,7 @@ public class ResCommand implements CommandExecutor, TabCompleter {
             case "ban", "unban" -> "territory.command.ban";
             case "gui" -> "territory.command.gui";
             case "view" -> "territory.command.view";
+            case "link" -> "territory.command.link";
             default -> null;
         };
     }
@@ -356,10 +504,31 @@ public class ResCommand implements CommandExecutor, TabCompleter {
                 }
             } else if (sub.equals("tp")) {
                 if ("list".startsWith(args[1].toLowerCase())) result.add("list");
+            } else if (sub.equals("link")) {
+                for (String s : LINK_SUBS) {
+                    if (s.startsWith(args[1].toLowerCase())) result.add(s);
+                }
             } else if (sub.equals("admin")) {
                 for (String s : ADMIN_SUBS) {
                     if (s.startsWith(args[1].toLowerCase())) result.add(s);
                 }
+            }
+        } else if (args.length == 3 && args[0].equalsIgnoreCase("link")
+                && !args[1].equalsIgnoreCase("add") && !args[1].equalsIgnoreCase("list")
+                && !args[1].equalsIgnoreCase("cancel")) {
+            Player player = sender instanceof Player pl ? pl : null;
+            if (player != null) {
+                Territory t = plugin.getTerritories().getAt(player.getLocation());
+                if (t != null) {
+                    for (int i = 1; i <= t.getLinks().size(); i++) {
+                        result.add(String.valueOf(i));
+                    }
+                }
+            }
+        } else if (args.length == 4 && args[0].equalsIgnoreCase("link")
+                && args[1].equalsIgnoreCase("mode")) {
+            for (String s : List.of("public", "trusted")) {
+                if (s.startsWith(args[3].toLowerCase())) result.add(s);
             }
         } else if (args.length == 3 && args[0].equalsIgnoreCase("admin")
                 && (args[1].equalsIgnoreCase("list") || args[1].equalsIgnoreCase("delete"))) {

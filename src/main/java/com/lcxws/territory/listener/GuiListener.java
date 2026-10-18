@@ -1,15 +1,19 @@
 package com.lcxws.territory.listener;
 
+import com.lcxws.territory.BlockKey;
+import com.lcxws.territory.InteractionLink;
 import com.lcxws.territory.Module;
 import com.lcxws.territory.Territory;
 import com.lcxws.territory.TerritoryPlugin;
 import com.lcxws.territory.gui.Actions;
 import org.bukkit.Bukkit;
+import org.bukkit.Location;
 import org.bukkit.Material;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
+import org.bukkit.event.inventory.ClickType;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -42,8 +46,9 @@ public class GuiListener implements Listener {
     public static final String TP_TITLE = "§8领地传送";
     public static final String PICKER_WHITELIST_TITLE = "§8选择玩家（加入白名单）";
     public static final String PICKER_BLACKLIST_TITLE = "§8选择玩家（加入黑名单）";
+    public static final String LINKS_TITLE = "§8交互链接";
 
-    private enum GuiType {MAIN, MODULES, WHITELIST, BLACKLIST, TPLIST, PICKER_W, PICKER_B}
+    private enum GuiType {MAIN, MODULES, WHITELIST, BLACKLIST, TPLIST, PICKER_W, PICKER_B, LINK}
 
     /** 模块槽位：从第2行第1格起，按模块数量自动排布（45格界面最多容纳20个模块） */
     private static final List<Integer> MODULE_SLOTS = buildModuleSlots();
@@ -57,6 +62,15 @@ public class GuiListener implements Listener {
     private static final int PICKER_PREV_SLOT = 45;
     private static final int PICKER_PAGE_SLOT = 49;
     private static final int PICKER_NEXT_SLOT = 53;
+
+    /** 交互链接列表：每页 36 条（槽位 9~44） */
+    private static final int LINK_PER_PAGE = 36;
+    private static final int LINK_BACK_SLOT = 45;
+    private static final int LINK_ADD_SLOT = 8;
+    private static final int LINK_PREV_SLOT = 48;
+    private static final int LINK_PAGE_SLOT = 49;
+    private static final int LINK_NEXT_SLOT = 50;
+    private static final int LINK_CLOSE_SLOT = 53;
 
     private static List<Integer> buildModuleSlots() {
         List<Integer> slots = new ArrayList<>();
@@ -123,6 +137,14 @@ public class GuiListener implements Listener {
                 : item(Material.GRAY_DYE, "§8显示边界粒子", List.of("§7需要站在领地内")));
         inv.setItem(20, item(Material.COMPASS, "§a传送到领地",
                 Arrays.asList("§7查看你可以传送的领地", "", "§e点击打开")));
+        boolean linkEnabled = plugin.getConfig().getBoolean("link.enabled", true);
+        boolean canLink = owner && linkEnabled && p.hasPermission("territory.command.link");
+        inv.setItem(24, canLink ? item(Material.LEVER, "§b交互链接",
+                        Arrays.asList("§7把领地外的按钮/拉杆", "§7绑定到领地内的门", "", "§e点击打开"))
+                : item(Material.GRAY_DYE, "§8交互链接",
+                        List.of(owner
+                                ? (linkEnabled ? "§7你没有 territory.command.link 权限" : "§7已在配置中关闭")
+                                : "§7需要站在自己的领地内")));
         inv.setItem(22, item(Material.BARRIER, "§c关闭", null));
         if (plugin.getTerritories().isAdmin(p)) {
             inv.setItem(26, item(Material.COMMAND_BLOCK, "§4超级管理",
@@ -339,6 +361,163 @@ public class GuiListener implements Listener {
         p.openInventory(inv);
     }
 
+    /* ========================= 交互链接 GUI ========================= */
+
+    public void openLinks(Player p, Territory t) {
+        openLinks(p, t, 0);
+    }
+
+    public void openLinks(Player p, Territory t, int page) {
+        if (t == null) {
+            openNextTick(p, () -> openMain(p));
+            return;
+        }
+        Territory current = plugin.getTerritories().get(t.getId());
+        if (current == null) {
+            openNextTick(p, () -> openMain(p));
+            return;
+        }
+        if (!current.isOwner(p.getUniqueId())) {
+            plugin.getMessages().send(p, "not-owner");
+            return;
+        }
+        if (!p.hasPermission("territory.command.link")) {
+            plugin.getMessages().send(p, "no-permission");
+            return;
+        }
+
+        List<InteractionLink> links = current.getLinks();
+        int pages = Math.max(1, (links.size() + LINK_PER_PAGE - 1) / LINK_PER_PAGE);
+        int safePage = Math.max(0, Math.min(page, pages - 1));
+        sessions.put(p.getUniqueId(), new GuiSession(GuiType.LINK, current.getId(), safePage));
+
+        Inventory inv = Bukkit.createInventory(null, 54, LINKS_TITLE);
+        ItemStack filler = item(Material.GRAY_STAINED_GLASS_PANE, " ", null);
+        for (int i = 0; i < 54; i++) inv.setItem(i, filler);
+
+        int max = plugin.getConfig().getInt("link.max-per-territory", 8);
+        inv.setItem(4, item(Material.LEVER, "§b交互链接", Arrays.asList(
+                "§7用领地外的按钮/拉杆控制领地内的门",
+                "§7链接数: §f" + links.size() + " §7/ §f" + (max < 0 ? "不限" : max),
+                "§7第 §f" + (safePage + 1) + " §7/ §f" + pages + " §7页",
+                "",
+                "§7按钮：自动关门模式下按一次开门并重新计时",
+                "§7拉杆：门状态跟随拉杆开关")));
+        inv.setItem(LINK_ADD_SLOT, item(Material.LIME_DYE, "§a➕ 新建绑定", Arrays.asList(
+                "§7右键领地外的按钮/拉杆",
+                "§7再右键领地内的门/活板门/栅栏门",
+                "§7潜行右键可取消")));
+        inv.setItem(LINK_BACK_SLOT, item(Material.ARROW, "§e返回主菜单", null));
+        inv.setItem(LINK_CLOSE_SLOT, item(Material.BARRIER, "§c关闭", null));
+
+        if (links.isEmpty()) {
+            inv.setItem(22, item(Material.BARRIER, "§c还没有交互链接", Arrays.asList(
+                    "§7点击上方绿色按钮开始绑定",
+                    "§7源方块可以放在领地外")));
+        }
+
+        int start = safePage * LINK_PER_PAGE;
+        for (int i = 0; i < LINK_PER_PAGE && start + i < links.size(); i++) {
+            InteractionLink link = links.get(start + i);
+            inv.setItem(9 + i, buildLinkItem(link, start + i + 1));
+        }
+
+        if (safePage > 0) inv.setItem(LINK_PREV_SLOT, item(Material.ARROW, "§e上一页", null));
+        inv.setItem(LINK_PAGE_SLOT, item(Material.PAPER,
+                "§7第 §f" + (safePage + 1) + " §7/ §f" + pages + " §7页", null));
+        if (safePage + 1 < pages) inv.setItem(LINK_NEXT_SLOT, item(Material.ARROW, "§e下一页", null));
+
+        p.openInventory(inv);
+    }
+
+    private ItemStack buildLinkItem(InteractionLink link, int index) {
+        List<String> lore = new ArrayList<>();
+        lore.add("§7源方块: §f" + formatKey(link.getSource()));
+        lore.add("§7目标方块: §f" + formatKey(link.getTarget()));
+        lore.add("§7模式: " + (link.isPublic() ? "§c公开（黑名单除外）" : "§a仅信任"));
+        lore.add("§7自动关门: §f" + (link.getAutoCloseSeconds() > 0
+                ? link.getAutoCloseSeconds() + " 秒" : "手动"));
+        lore.add("§7状态: " + (link.isEnabled() ? "§a启用" : "§c停用"));
+        lore.add("");
+        lore.add("§e左键: 启用/停用");
+        lore.add("§e右键: 切换公开/仅信任");
+        lore.add("§cShift+左键: 删除");
+        String name = "§e#" + index + " " + (link.isPublic() ? "§c公开" : "§a仅信任")
+                + (link.isEnabled() ? "" : " §7[停用]");
+        return item(link.isPublic() ? Material.LEVER : Material.STONE_BUTTON, name, lore);
+    }
+
+    private void linksClick(Player p, GuiSession s, int slot, ClickType click) {
+        Territory t = plugin.getTerritories().get(s.territoryId);
+        if (t == null) {
+            openNextTick(p, () -> openMain(p));
+            return;
+        }
+        if (slot == LINK_BACK_SLOT) {
+            openNextTick(p, () -> openMain(p));
+            return;
+        }
+        if (slot == LINK_CLOSE_SLOT) {
+            p.closeInventory();
+            return;
+        }
+        if (slot == LINK_ADD_SLOT) {
+            p.closeInventory();
+            plugin.getLinkListener().beginSelection(p, true);
+            return;
+        }
+        if (slot == LINK_PREV_SLOT) {
+            if (s.page > 0) openNextTick(p, () -> openLinks(p, t, s.page - 1));
+            return;
+        }
+        if (slot == LINK_NEXT_SLOT) {
+            openNextTick(p, () -> openLinks(p, t, s.page + 1));
+            return;
+        }
+        if (slot < 9 || slot >= 9 + LINK_PER_PAGE) return;
+
+        List<InteractionLink> links = t.getLinks();
+        int index = s.page * LINK_PER_PAGE + (slot - 9);
+        if (index >= links.size()) return;
+        InteractionLink link = links.get(index);
+
+        if (click == ClickType.SHIFT_LEFT) {
+            String label = formatLink(link);
+            plugin.getTerritories().removeLink(link);
+            plugin.getMessages().send(p, "link-removed", "%link%", label);
+            p.playSound(p.getLocation(), Sound.BLOCK_NOTE_BLOCK_BASS, 0.7f, 0.8f);
+            openNextTick(p, () -> openLinks(p, t, s.page));
+        } else if (click == ClickType.RIGHT) {
+            link.setMode(link.isPublic() ? InteractionLink.Mode.TRUSTED : InteractionLink.Mode.PUBLIC);
+            plugin.getTerritories().markDirty();
+            plugin.getMessages().send(p, link.isPublic() ? "link-mode-public" : "link-mode-trusted");
+            if (link.isPublic()) warnPublicLink(p, link);
+            openNextTick(p, () -> openLinks(p, t, s.page));
+        } else if (click == ClickType.LEFT) {
+            link.setEnabled(!link.isEnabled());
+            plugin.getTerritories().markDirty();
+            plugin.getMessages().send(p, link.isEnabled() ? "link-enabled" : "link-disabled-state",
+                    "%link%", formatLink(link));
+            openNextTick(p, () -> openLinks(p, t, s.page));
+        }
+    }
+
+    private void warnPublicLink(Player p, InteractionLink link) {
+        plugin.getMessages().send(p, "link-public-warn");
+        Location loc = link.getSource().toLocation();
+        if (loc != null && plugin.getTerritories().getAt(loc) != null) {
+            plugin.getMessages().send(p, "link-public-source-claimed");
+        }
+    }
+
+    private static String formatKey(BlockKey key) {
+        return key.getWorld() + " " + key.getX() + "," + key.getY() + "," + key.getZ();
+    }
+
+    private static String formatLink(InteractionLink link) {
+        return formatKey(link.getSource()) + " -> " + formatKey(link.getTarget());
+    }
+
     /* ========================= 点击分发 ========================= */
 
     @EventHandler
@@ -359,6 +538,7 @@ public class GuiListener implements Listener {
             case WHITELIST, BLACKLIST -> membersClick(p, s, slot, s.type == GuiType.BLACKLIST);
             case PICKER_W, PICKER_B -> pickerClick(p, s, slot, s.type == GuiType.PICKER_B);
             case TPLIST -> tpListClick(p, slot);
+            case LINK -> linksClick(p, s, slot, event.getClick());
         }
     }
 
@@ -404,7 +584,12 @@ public class GuiListener implements Listener {
                 if (here != null) Actions.view(plugin, p);
             }
             case 20 -> openNextTick(p, () -> openTpList(p));
-            case 22 -> p.closeInventory();
+            case 24 -> {
+                if (owner && plugin.getConfig().getBoolean("link.enabled", true)
+                        && p.hasPermission("territory.command.link")) {
+                    openNextTick(p, () -> openLinks(p, here));
+                }
+            }            case 22 -> p.closeInventory();
             case 26 -> {
                 if (plugin.getTerritories().isAdmin(p)) {
                     p.sendMessage("§6管理命令: /res admin <whoami|reload|list|info|delete|deletechunk>");
@@ -568,6 +753,7 @@ public class GuiListener implements Listener {
         return MAIN_TITLE.equals(title) || MODULES_TITLE.equals(title)
                 || WHITELIST_TITLE.equals(title) || BLACKLIST_TITLE.equals(title)
                 || TP_TITLE.equals(title)
+                || LINKS_TITLE.equals(title)
                 || PICKER_WHITELIST_TITLE.equals(title) || PICKER_BLACKLIST_TITLE.equals(title);
     }
 

@@ -40,6 +40,21 @@ entry-exit-messages: true
 view-particle-seconds: 30
 view-radius-chunks: 2
 
+# 交互链接：用领地外的按钮/拉杆远程控制领地内的门、活板门、栅栏门
+# 源方块必须在荒野或自己的领地内；目标方块必须在自己的领地内
+link:
+  enabled: true
+  # 每个领地最多几条链接（-1 = 不限制）
+  max-per-territory: 8
+  # 新建链接的默认模式：TRUSTED（仅领主/白名单）或 PUBLIC（任何未被拉黑的玩家）
+  default-mode: TRUSTED
+  # 按钮触发的默认自动关门秒数（0 = 不自动关，按钮改为开/关切换）；拉杆不使用自动关门
+  default-auto-close-seconds: 5
+  # 同一玩家同一链接的触发冷却（毫秒）
+  cooldown-ms: 500
+  # 源方块到目标方块的最大距离（0 = 不限制）
+  max-distance: 0
+
 # 异步自动保存间隔（秒）。修改数据后约在此间隔后写盘，关服时强制保存
 autosave-seconds: 5
 
@@ -119,6 +134,39 @@ messages:
   list-header: "&6===== 你的领地 ====="
   list-item: "&e#%index% &7| %chunks% 个区块 | 中心: %x%, %z% | 模块: %modules%"
   list-none: "&c你还没有任何领地。"
+  link-disabled: "&c交互链接功能已在配置中关闭。"
+  link-need-own-territory: "&c请站在自己的领地内开始绑定。"
+  link-source-prompt: "&a请右键领地外的按钮或拉杆（潜行右键取消，60秒内有效）。"
+  link-target-prompt: "&a已记录源方块。请右键自己领地内的门/活板门/栅栏门。"
+  link-source-invalid: "&c源方块必须是按钮或拉杆。"
+  link-source-foreign: "&c不能绑定别人领地里的按钮；源方块请放在领地外或自己的领地内。"
+  link-target-invalid: "&c目标方块必须是门、活板门或栅栏门。"
+  link-target-not-own: "&c目标方块必须位于自己的领地内。"
+  link-cross-world: "&c源方块和目标方块必须在同一个世界。"
+  link-same-block: "&c源方块和目标方块不能是同一个方块。"
+  link-limit: "&c该领地的交互链接已达上限（&e%max%&c）。"
+  link-duplicate: "&c这个源方块已经绑定过门了。"
+  link-too-far: "&c源方块与目标方块距离太远（上限 &e%max% &c格）。"
+  link-created: "&a已创建交互链接：&e%source% &a→ &e%target%&a。"
+  link-cancelled: "&7已取消绑定选择。"
+  link-timeout: "&e绑定选择已超时（60秒）。"
+  link-invalid-removed: "&e一条交互链接的目标已失效，系统已自动删除。"
+  link-blacklisted: "&c你被禁止使用该领地的交互链接。"
+  link-trusted-only: "&c这条链接仅限领主/白名单成员使用。"
+  link-source-foreign-use: "&c这个按钮位于别人的领地内，不能用来触发该链接。"
+  link-powered: "&c目标门正被红石控制，暂不能通过链接操作。"
+  link-removed: "&a已删除交互链接：&e%link%"
+  link-enabled: "&a已启用交互链接：&e%link%"
+  link-disabled-state: "&e已停用交互链接：&e%link%"
+  link-mode-public: "&e已切换为公开链接：任何未被拉黑的玩家都可以使用。"
+  link-mode-trusted: "&a已切换为仅信任链接。"
+  link-mode-invalid: "&c模式只能是 public 或 trusted。"
+  link-bad-index: "&c链接序号不存在，用 /res link list 查看。"
+  link-public-warn: "&c注意：公开链接会允许任何未被拉黑的玩家开门。"
+  link-public-source-claimed: "&e但源方块位于领地内，访客无法按到它，这条公开链接实际上只有信任成员能触发。"
+  link-list-header: "&6===== 当前领地的交互链接 ====="
+  link-list-item: "&e#%index% &7| %source% &7→ %target% &7| %mode% &7| 自动关门: %auto% &7| %status%"
+  link-none: "&c当前领地还没有交互链接。"
   help:
     - "&6===== 领地命令 /res（/land） ====="
     - "&e/res &7- 打开领地菜单 GUI（推荐）"
@@ -133,4 +181,5 @@ messages:
     - "&e/res ban <玩家> &7- 黑名单（禁止进入）"
     - "&e/res unban <玩家> &7- 移出黑名单"
     - "&e/res view &7- 显示领地边界粒子（30秒）"
+    - "&e/res link &7- 交互链接：外部按钮远程控制领地内的门"
     - "&e/res admin &7- 超级管理员命令"

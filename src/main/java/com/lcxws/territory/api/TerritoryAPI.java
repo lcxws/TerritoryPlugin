@@ -50,6 +50,9 @@ public interface TerritoryAPI {
     /** 全服领地总数 */
     int getTerritoryCount();
 
+    /** 某领地的全部交互链接（不可变快照；领地不存在时返回空列表） */
+    List<TerritoryLinkInfo> getLinks(UUID territoryId);
+
     /* ========================= 身份判断 ========================= */
 
     /** 是否为领主 */

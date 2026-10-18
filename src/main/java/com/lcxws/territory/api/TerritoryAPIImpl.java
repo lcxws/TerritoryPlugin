@@ -1,5 +1,6 @@
 package com.lcxws.territory.api;
 
+import com.lcxws.territory.InteractionLink;
 import com.lcxws.territory.Module;
 import com.lcxws.territory.Territory;
 import com.lcxws.territory.TerritoryPlugin;
@@ -8,6 +9,7 @@ import org.bukkit.Location;
 import org.bukkit.World;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.UUID;
 
@@ -70,6 +72,17 @@ public final class TerritoryAPIImpl implements TerritoryAPI {
     @Override
     public int getTerritoryCount() {
         return tm().territoryCount();
+    }
+
+    @Override
+    public List<TerritoryLinkInfo> getLinks(UUID territoryId) {
+        List<TerritoryLinkInfo> list = new ArrayList<>();
+        Territory t = raw(territoryId);
+        if (t == null) return list;
+        for (InteractionLink link : t.getLinks()) {
+            list.add(TerritoryLinkInfo.of(link));
+        }
+        return Collections.unmodifiableList(list);
     }
 
     /* ========================= 身份判断 ========================= */

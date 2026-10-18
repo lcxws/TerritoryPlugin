@@ -4,6 +4,7 @@ import com.lcxws.territory.api.TerritoryAPIImpl;
 import com.lcxws.territory.api.TerritoryAPIProvider;
 import com.lcxws.territory.command.ResCommand;
 import com.lcxws.territory.listener.GuiListener;
+import com.lcxws.territory.listener.LinkListener;
 import com.lcxws.territory.listener.MovementListener;
 import com.lcxws.territory.listener.ProtectionListener;
 import com.lcxws.territory.manager.EconomyHook;
@@ -32,6 +33,7 @@ public class TerritoryPlugin extends JavaPlugin {
     private Messages messages;
     private ResCommand resCommand;
     private GuiListener guiListener;
+    private LinkListener linkListener;
     private TerritoryAPIImpl api;
 
     /** /res view 边界粒子任务：玩家 -> 任务 */
@@ -43,6 +45,7 @@ public class TerritoryPlugin extends JavaPlugin {
         messages = new Messages(this);
         territoryManager = new TerritoryManager(this);
         territoryManager.load();
+        linkListener = new LinkListener(this);
         economy = new EconomyHook(this);
 
         // 注册对外 API（ServicesManager 与 TerritoryAPIProvider.get() 均可获取）
@@ -51,6 +54,7 @@ public class TerritoryPlugin extends JavaPlugin {
 
         Bukkit.getPluginManager().registerEvents(new ProtectionListener(this), this);
         Bukkit.getPluginManager().registerEvents(new MovementListener(this), this);
+        Bukkit.getPluginManager().registerEvents(linkListener, this);
         guiListener = new GuiListener(this);
         Bukkit.getPluginManager().registerEvents(guiListener, this);
         Bukkit.getPluginManager().registerEvents(new SessionListener(), this);
@@ -99,6 +103,10 @@ public class TerritoryPlugin extends JavaPlugin {
 
     public GuiListener getGui() {
         return guiListener;
+    }
+
+    public LinkListener getLinkListener() {
+        return linkListener;
     }
 
     public TerritoryManager getTerritories() {

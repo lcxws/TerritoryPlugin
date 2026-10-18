@@ -1,5 +1,7 @@
 package com.lcxws.territory.manager;
 
+import com.lcxws.territory.BlockKey;
+import com.lcxws.territory.InteractionLink;
 import com.lcxws.territory.Module;
 import com.lcxws.territory.Territory;
 import com.lcxws.territory.TerritoryPlugin;
@@ -29,6 +31,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -51,6 +54,10 @@ public class TerritoryManager {
     private final Map<UUID, String> nameCache = new HashMap<>();
     /** 启用领地的世界 */
     private Set<String> enabledWorlds = new HashSet<>();
+    /** 源方块 -> 交互链接列表（同一源方块可能被多个领地各自绑定） */
+    private final Map<BlockKey, List<InteractionLink>> linkIndex = new HashMap<>();
+    /** 链接 ID -> 链接（GUI / API / 定时关门任务使用） */
+    private final Map<UUID, InteractionLink> linksById = new HashMap<>();
 
     private volatile boolean dirty;
     private final File dataFile;
@@ -268,6 +275,10 @@ public class TerritoryManager {
         for (Territory t : territories.values()) {
             if (t.getOwner().equals(owner) && t.getWorld().equals(world)) old.add(t);
         }
+        // 链接先摘出来，等新区块归属确定后按目标区块重新挂回对应领地。
+        // 这样拆分时链接会跟着目标区块走，放弃目标区块时链接会被丢弃。
+        List<InteractionLink> oldLinks = new ArrayList<>();
+        for (Territory t : old) oldLinks.addAll(t.getLinks());
         Map<Long, UUID> idx = chunkIndex.get(world);
 
         // 3. 为每个旧领地指定“归属分量”：优先含传送点的分量，否则含区块最多的分量
@@ -340,6 +351,7 @@ public class TerritoryManager {
                 rep.getBlacklist().clear();
                 rep.getPurchased().clear();
                 rep.getEnabled().clear();
+                rep.getLinks().clear();
             }
             for (Territory t : overlapping) {
                 rep.getWhitelist().addAll(t.getWhitelist());
@@ -363,6 +375,16 @@ public class TerritoryManager {
             territories.put(rep.getId(), rep);
             for (Long c : comp) idx.put(c, rep.getId());
         }
+
+        // 5. 链接按目标区块的新归属重新挂载；目标已不在该主人任何领地内则丢弃
+        for (InteractionLink link : oldLinks) {
+            BlockKey target = link.getTarget();
+            Territory targetT = getAt(target.getWorld(), target.getChunkX(), target.getChunkZ());
+            if (targetT == null || !targetT.getOwner().equals(owner)) continue;
+            link.setTerritoryId(targetT.getId());
+            targetT.getLinks().add(link);
+        }
+        rebuildLinkIndex();
     }
 
     /** 删除整个领地（管理命令用，无退款） */
@@ -376,9 +398,101 @@ public class TerritoryManager {
         if (idx != null) {
             for (Long c : t.getChunks()) idx.remove(c);
         }
+        removeLinksOf(t);
         territories.remove(t.getId());
         markDirty();
         fireDeleteEvent(t);
+    }
+
+    /* ========================= 交互链接 ========================= */
+
+    /** 右键源方块时待处理的链接；没有链接返回空列表 */
+    public List<InteractionLink> linksAt(BlockKey source) {
+        List<InteractionLink> list = linkIndex.get(source);
+        return list != null ? Collections.unmodifiableList(list) : Collections.emptyList();
+    }
+
+    public List<InteractionLink> linksOf(Territory t) {
+        return t != null ? Collections.unmodifiableList(t.getLinks()) : Collections.emptyList();
+    }
+
+    public InteractionLink linkById(UUID id) {
+        return linksById.get(id);
+    }
+
+    public int linkCount(Territory t) {
+        return t != null ? t.getLinks().size() : 0;
+    }
+
+    /** 新增链接；同一领地内同一个源方块只允许一条（防止重复触发） */
+    public boolean addLink(Territory t, InteractionLink link) {
+        if (t == null || link == null) return false;
+        for (InteractionLink existing : t.getLinks()) {
+            if (existing.getSource().equals(link.getSource())) return false;
+        }
+        link.setTerritoryId(t.getId());
+        t.getLinks().add(link);
+        indexLink(link);
+        markDirty();
+        return true;
+    }
+
+    public boolean removeLink(InteractionLink link) {
+        if (link == null) return false;
+        Territory t = territories.get(link.getTerritoryId());
+        if (t != null) t.getLinks().remove(link);
+        unindexLink(link);
+        markDirty();
+        return t != null;
+    }
+
+    public void removeLinksOf(Territory t) {
+        if (t == null) return;
+        for (InteractionLink link : new ArrayList<>(t.getLinks())) {
+            unindexLink(link);
+        }
+        t.getLinks().clear();
+        markDirty();
+    }
+
+    /** 目标方块被破坏时删除所有指向它的链接 */
+    public void removeLinksTargeting(BlockKey target) {
+        if (target == null) return;
+        List<InteractionLink> remove = new ArrayList<>();
+        for (InteractionLink link : linksById.values()) {
+            if (link.getTarget().equals(target)) remove.add(link);
+        }
+        for (InteractionLink link : remove) {
+            removeLink(link);
+        }
+    }
+
+    /** 重建索引：载入数据、领地合并/拆分/删除后调用 */
+    public void rebuildLinkIndex() {
+        linkIndex.clear();
+        linksById.clear();
+        for (Territory t : territories.values()) {
+            for (InteractionLink link : t.getLinks()) {
+                link.setTerritoryId(t.getId());
+                indexLink(link);
+            }
+        }
+    }
+
+    private void indexLink(InteractionLink link) {
+        if (link == null || link.getSource() == null) return;
+        linksById.put(link.getId(), link);
+        linkIndex.computeIfAbsent(link.getSource(), k -> new ArrayList<>()).add(link);
+    }
+
+    private void unindexLink(InteractionLink link) {
+        if (link == null) return;
+        linksById.remove(link.getId(), link);
+        List<InteractionLink> list = linkIndex.get(link.getSource());
+        if (list != null) {
+            list.remove(link);
+            if (list.isEmpty()) linkIndex.remove(link.getSource());
+        }
     }
 
     /** 管理命令：移除领地中的单个区块（无退款，走合并/拆分逻辑） */
@@ -556,6 +670,19 @@ public class TerritoryManager {
             List<String> en = new ArrayList<>();
             for (Module m : t.getEnabled()) en.add(m.name());
             yaml.set(base + ".enabled", en);
+            List<Map<String, Object>> links = new ArrayList<>();
+            for (InteractionLink link : t.getLinks()) {
+                Map<String, Object> row = new LinkedHashMap<>();
+                row.put("id", link.getId().toString());
+                row.put("source", link.getSource().serialize());
+                row.put("target", link.getTarget().serialize());
+                row.put("mode", link.getMode().name());
+                row.put("auto-close", link.getAutoCloseSeconds());
+                row.put("enabled", link.isEnabled());
+                row.put("created", link.getCreatedAt());
+                links.add(row);
+            }
+            yaml.set(base + ".links", links);
             if (t.hasTp()) {
                 Location tp = t.getTpPoint();
                 yaml.set(base + ".tp", tp.getX() + "," + tp.getY() + "," + tp.getZ()
@@ -600,6 +727,8 @@ public class TerritoryManager {
         chunkIndex.clear();
         ownerChunks.clear();
         nameCache.clear();
+        linkIndex.clear();
+        linksById.clear();
         if (!dataFile.exists()) return;
 
         YamlConfiguration yaml = YamlConfiguration.loadConfiguration(dataFile);
@@ -670,6 +799,26 @@ public class TerritoryManager {
                 } catch (IllegalArgumentException ignored) {
                 }
             }
+            for (Map<?, ?> raw : secs.getMapList(key + ".links")) {
+                BlockKey source = BlockKey.parse(asString(raw.get("source")));
+                BlockKey target = BlockKey.parse(asString(raw.get("target")));
+                if (source == null || target == null) continue;
+                if (!world.equals(source.getWorld()) || !world.equals(target.getWorld())) continue;
+                if (!t.getChunks().contains(pack(target.getChunkX(), target.getChunkZ()))) continue;
+                UUID linkId;
+                try {
+                    String rawId = asString(raw.get("id"));
+                    linkId = rawId != null ? UUID.fromString(rawId) : UUID.randomUUID();
+                } catch (IllegalArgumentException ex) {
+                    linkId = UUID.randomUUID();
+                }
+                InteractionLink.Mode mode = InteractionLink.Mode.byName(asString(raw.get("mode")));
+                int autoClose = asInt(raw.get("auto-close"), 0);
+                boolean enabled = asBoolean(raw.get("enabled"), true);
+                long created = asLong(raw.get("created"), System.currentTimeMillis());
+                t.getLinks().add(new InteractionLink(linkId, id, source, target,
+                        mode, autoClose, enabled, created));
+            }
             String tp = secs.getString(key + ".tp");
             if (tp != null) {
                 String[] p = tp.split(",");
@@ -691,6 +840,43 @@ public class TerritoryManager {
                     .computeIfAbsent(world, k -> new HashSet<>())
                     .addAll(t.getChunks());
         }
+        rebuildLinkIndex();
+    }
+
+    private static String asString(Object value) {
+        return value != null ? value.toString() : null;
+    }
+
+    private static int asInt(Object value, int def) {
+        if (value instanceof Number n) return n.intValue();
+        if (value != null) {
+            try {
+                return Integer.parseInt(value.toString());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return def;
+    }
+
+    private static long asLong(Object value, long def) {
+        if (value instanceof Number n) return n.longValue();
+        if (value != null) {
+            try {
+                return Long.parseLong(value.toString());
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return def;
+    }
+
+    private static boolean asBoolean(Object value, boolean def) {
+        if (value instanceof Boolean b) return b;
+        if (value != null) {
+            String s = value.toString();
+            if (s.equalsIgnoreCase("true")) return true;
+            if (s.equalsIgnoreCase("false")) return false;
+        }
+        return def;
     }
 
     public Set<String> enabledWorlds() {

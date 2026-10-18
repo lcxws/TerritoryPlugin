@@ -5,14 +5,18 @@
 相邻区块自动合并；进阶保护通过 GUI 自行购买开启；
 **OP 互不侵犯**——OP 不能动其他人的领地，只有 config 超管名单、显式授予的 `territory.bypass` 权限或控制台能越权。
 
+> **🧪 beta 分支（1.7.0-beta）新增：交互链接**——把领地外的按钮/拉杆绑定到领地内的门，
+> 无需拉红石线，支持公开/仅信任两种权限。详见下方[交互链接](#交互链接领地外的按钮控制领地内的门170-beta-新增)。
+
 > **版本兼容**：1.20 ～ 1.21.x 全系列（含 1.20.5+ 的 API 改名适配），已在 1.21.1 API 上通过编译兼容性验证；不支持的：Folia（区域化调度）与 1.19 及更老版本。
 
-> **📌 SQL 存储版（SQLite / MySQL）已发布于 [`sql` 分支](https://github.com/lcxws/TerritoryPlugin/tree/sql)**
-> （玩法、命令、GUI 与本分支完全一致，仅存储方式不同；支持从本分支数据自动迁移）。
+> **📌 SQL 存储版（SQLite / MySQL）发布于 [`sql` 分支](https://github.com/lcxws/TerritoryPlugin/tree/sql)**
+> （玩法、命令、GUI 与稳定版一致，仅存储方式不同；支持从本分支数据自动迁移）。
+> 本 beta 分支的交互链接目前只在 YAML 版实现，SQL 分支待移植。
 
 ## 快速开始
 
-1. 把 `TerritoryPlugin-1.6.0.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进服务端的 `plugins` 文件夹。
+1. 把 `TerritoryPlugin-1.7.0-beta.jar` 和经济插件（EconomyPlugin 或任意 Vault 兼容经济插件）一起放进服务端的 `plugins` 文件夹。
 2. 首次启动后编辑 `plugins/Territory/config.yml`：
    - 把 `enabled-worlds` 改成你的**主世界名字**（默认 `world`，仅主世界启用领地）；
    - 想让自己越权管理的话，用 `/res admin whoami` 查询自己的 UUID 填进 `superadmins`。
@@ -33,7 +37,7 @@
 
 ```bash
 ./gradlew build
-# 产物: build/libs/TerritoryPlugin-1.6.0.jar
+# 产物: build/libs/TerritoryPlugin-1.7.0-beta.jar
 ```
 
 无需任何额外 jar 依赖（Mohist dev bundle 由 Gradle 自动下载；本分支数据存储为 YAML，无 SQL 驱动）。
@@ -51,9 +55,70 @@
 | 🌐 设置传送点 | 传送 | 传送点=当前站立位置 |
 | ✨ 边界粒子 | 可视化 | 30 秒边界粒子，仅自己可见 |
 | 🧭 传送到领地 | 传送 | 领地罗盘列表，点击即传送 |
+| 🔗 交互链接 | 远程开关门 | **领地外的按钮/拉杆 → 领地内的门**，公开/仅信任可切换 |
 
 灰色的按钮表示当前状态下不可用（如不在自己领地内），并说明原因。
 白/黑名单加人：点击 ➕ 打开玩家选择界面，**直接点击玩家头像即可加入**（在线玩家优先，其次为服务器已知玩家，支持分页）；从未进过服的玩家可用命令 `/res trust|ban <玩家名>` 添加。
+
+## 交互链接：领地外的按钮控制领地内的门（1.7.0-beta 新增）
+
+适合把“公共入口按钮”放在领地外，按下后由插件直接操作领地内的门/活板门/栅栏门，不需要拉红石线。
+
+### 使用方式
+
+1. 站在自己的领地内输入 `/res`，点击 **🔗 交互链接 → ➕ 新建绑定**。
+2. 右键领地外的按钮或拉杆（源方块）。
+3. 右键自己领地内的门、活板门或栅栏门（目标方块）。
+4. 回到列表后：
+   - **左键**：启用 / 停用；
+   - **右键**：切换 公开 / 仅信任；
+   - **Shift+左键**：删除。
+
+选择过程中有 60 秒时限，潜行右键可取消。命令同样可用：
+
+```
+/res link add                          进入两步绑定模式
+/res link list                         查看当前领地的链接
+/res link remove <序号>                 删除
+/res link mode <序号> public|trusted    切换权限
+/res link enable|disable <序号>         启用/停用
+/res link cancel                       取消当前选择
+```
+
+### 谁能使用
+
+| 触发者 | 公开链接 | 仅信任链接 |
+|--------|----------|------------|
+| 领主 | ✅ | ✅ |
+| 白名单成员 | ✅ | ✅ |
+| 普通访客 | ✅ | ❌ |
+| 黑名单成员 | ❌ 始终拒绝 | ❌ |
+| 有 `territory.bypass` 的管理员 | ✅ | ✅ |
+
+- 只有**领主**可以创建、删除、切换模式；白名单成员只能使用。
+- 源方块必须在**荒野或自己名下的领地**内，不能绑定别人领地里的按钮；目标方块必须在自己的领地内，且与源方块同一世界。
+- 公开链接会真正放人进门，但进门后仍然不能破坏、放置、开箱子；黑名单玩家仍然无法进入。
+- 如果源方块位于领地内，访客按不到它，公开模式实际上只有信任成员能触发；公开按钮建议放在荒野。
+
+### 开关门行为
+
+- **按钮**：默认开门后 5 秒自动关闭（`default-auto-close-seconds` 可改）。自动关门模式下，每次按下只会开门并重新计时，不会把别人刚开的门关上；配置为 `0` 时改为开/关切换。
+- **拉杆**：目标门状态跟随拉杆，拉杆开=门开，拉杆关=门关。
+- **双开门**自动联动；铁门、铁活板门也可由链接打开。
+- 目标门正被红石供电时会拒绝操作，避免和红石电路打架。
+- 不支持箱子/熔炉等容器：远程开箱等于绕过整个领地保护体系，需要单独的权限与日志设计。
+
+配置项（`config.yml`）：
+
+```yaml
+link:
+  enabled: true
+  max-per-territory: 8       # 每个领地最多链接数，-1 = 不限
+  default-mode: TRUSTED      # 新建链接默认权限：TRUSTED / PUBLIC
+  default-auto-close-seconds: 5
+  cooldown-ms: 500
+  max-distance: 0            # 源到目标的最大距离，0 = 不限
+```
 
 ## 玩法与价格（均可在 config 修改）
 
@@ -141,6 +206,7 @@ Landlord / Dominion），本仓库全部代码为原创实现，未复制任何�
 | `territory.command.trust` | 允许 | /res trust / untrust 管理白名单 |
 | `territory.command.ban` | 允许 | /res ban / unban 管理黑名单 |
 | `territory.command.view` | 允许 | /res view 边界粒子 |
+| `territory.command.link` | 允许 | /res link 管理交互链接（远程开关门） |
 | `territory.admin` | **拒绝** | /res admin 管理命令（等同 config 超管名单；OP 也不自动获得） |
 | `territory.bypass` | **拒绝** | 无视领地保护（可在他人领地破坏/放置，**慎用**） |
 
@@ -163,6 +229,7 @@ Landlord / Dominion），本仓库全部代码为原创实现，未复制任何�
 /res trust <玩家>     加入白名单              /res untrust 移出白名单
 /res ban <玩家>       加入黑名单              /res unban   移出黑名单
 /res view             边界粒子显示30秒
+/res link ...         交互链接（远程开关门）
 /res admin ...        超级管理命令
 ```
 `/res` 与 `/land` 等效。
@@ -181,11 +248,12 @@ if (api != null) {
 }
 ```
 
-- **查询**：`getTerritoryAt` / `getTerritory` / `getTerritoriesOf` / `getChunkCount` / `getTerritoryCount`
+- **查询**：`getTerritoryAt` / `getTerritory` / `getTerritoriesOf` / `getChunkCount` / `getTerritoryCount` / `getLinks`
 - **判断**：`isOwner` / `isTrusted` / `isBlacklisted` / `isModuleEnabled`
 - **名单**：`addTrusted` / `removeTrusted` / `addBlacklisted` / `removeBlacklisted`（黑名单优先规则与命令一致）
 - **管理**：`claimChunk`（免费圈地，供活动/迁移工具）/ `deleteTerritory`
-- **事件**：`TerritoryClaimEvent` / `TerritoryUnclaimEvent` / `TerritoryMemberChangeEvent` / `TerritoryDeleteEvent`（命令、GUI、API 三种入口都会触发）
+- **事件**：`TerritoryClaimEvent` / `TerritoryUnclaimEvent` / `TerritoryMemberChangeEvent` / `TerritoryDeleteEvent` /
+  `TerritoryLinkUseEvent`（可取消，交互链接执行前触发）
 
 接入方 `plugin.yml` 加 `softdepend: [Territory]`，编译依赖直接用本插件 jar。
 完整文档与示例见 [API_USAGE_EXAMPLE.md](API_USAGE_EXAMPLE.md)。
@@ -193,10 +261,11 @@ if (api != null) {
 ## 性能设计（人少服/轻量化）
 
 - **O(1) 快速路径**：所有保护检查先查 `世界→区块→领地` 的 HashMap 索引，无领地直接放行；
+- **交互链接同样 O(1)**：右键时只查一次 `源方块坐标→链接` 的 HashMap，不扫描领地；
 - **移动事件**只在跨区块边界时才做查找，转头/微动零开销；
 - **YAML 单文件存储**（`territories.yml`），改动后约 5 秒异步批量写盘（主线程零 IO），关服强制同步保存；
 - 无数据库、无网络依赖，插件本体约 50KB。
 
 ## 数据文件
 
-`plugins/Territory/territories.yml`：领地、名单、模块、传送点全部在此，可手动备份/编辑（改完 `/res admin reload` 前先停服）。
+`plugins/Territory/territories.yml`：领地、名单、模块、传送点与交互链接全部在此，可手动备份/编辑（改完 `/res admin reload` 前先停服）。
