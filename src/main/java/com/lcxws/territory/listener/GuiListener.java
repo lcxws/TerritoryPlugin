@@ -6,15 +6,12 @@ import com.lcxws.territory.TerritoryPlugin;
 import com.lcxws.territory.gui.Actions;
 import org.bukkit.Bukkit;
 import org.bukkit.Material;
-import org.bukkit.OfflinePlayer;
 import org.bukkit.Sound;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryDragEvent;
-import org.bukkit.event.player.AsyncPlayerChatEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
@@ -25,15 +22,16 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 全 GUI 化领地管理：
  * /res 或 /res gui 打开主菜单，圈地/放弃/保护模块/白名单/黑名单/传送点/传送/粒子全部点选。
- * 白/黑名单加人支持聊天栏输入玩家名（输入"取消"退出，30秒超时）。
+ * 白/黑名单加人：点击"添加"打开玩家选择界面，直接点击玩家头像即可加入（在线玩家优先，其次为服务器已知玩家）。
  */
 public class GuiListener implements Listener {
 
@@ -42,13 +40,23 @@ public class GuiListener implements Listener {
     public static final String WHITELIST_TITLE = "§8白名单管理";
     public static final String BLACKLIST_TITLE = "§8黑名单管理";
     public static final String TP_TITLE = "§8领地传送";
+    public static final String PICKER_WHITELIST_TITLE = "§8选择玩家（加入白名单）";
+    public static final String PICKER_BLACKLIST_TITLE = "§8选择玩家（加入黑名单）";
 
-    private enum GuiType {MAIN, MODULES, WHITELIST, BLACKLIST, TPLIST}
+    private enum GuiType {MAIN, MODULES, WHITELIST, BLACKLIST, TPLIST, PICKER_W, PICKER_B}
 
     /** 模块槽位：从第2行第1格起，按模块数量自动排布（45格界面最多容纳20个模块） */
     private static final List<Integer> MODULE_SLOTS = buildModuleSlots();
     private static final int MODULES_BACK_SLOT = 40;
     private static final int MODULES_CLOSE_SLOT = 44;
+
+    /** 玩家选择界面：每页 36 个头像（槽位 9~44） */
+    private static final int PICKER_PER_PAGE = 36;
+    private static final int PICKER_BACK_SLOT = 0;
+    private static final int PICKER_CLOSE_SLOT = 8;
+    private static final int PICKER_PREV_SLOT = 45;
+    private static final int PICKER_PAGE_SLOT = 49;
+    private static final int PICKER_NEXT_SLOT = 53;
 
     private static List<Integer> buildModuleSlots() {
         List<Integer> slots = new ArrayList<>();
@@ -57,32 +65,25 @@ public class GuiListener implements Listener {
         }
         return slots;
     }
-    private static final long INPUT_TIMEOUT_MS = 30_000;
 
     private static class GuiSession {
         final GuiType type;
         final UUID territoryId;
+        final int page;
 
         GuiSession(GuiType type, UUID territoryId) {
+            this(type, territoryId, 0);
+        }
+
+        GuiSession(GuiType type, UUID territoryId, int page) {
             this.type = type;
             this.territoryId = territoryId;
-        }
-    }
-
-    private static class PendingInput {
-        final UUID territoryId;
-        final boolean blacklist;
-        final long expireAt = System.currentTimeMillis() + INPUT_TIMEOUT_MS;
-
-        PendingInput(UUID territoryId, boolean blacklist) {
-            this.territoryId = territoryId;
-            this.blacklist = blacklist;
+            this.page = page;
         }
     }
 
     private final TerritoryPlugin plugin;
     private final Map<UUID, GuiSession> sessions = new HashMap<>();
-    private final Map<UUID, PendingInput> pendingInputs = new ConcurrentHashMap<>();
 
     public GuiListener(TerritoryPlugin plugin) {
         this.plugin = plugin;
@@ -223,26 +224,96 @@ public class GuiListener implements Listener {
         for (int i = 0; i < 9; i++) inv.setItem(i, filler);
 
         inv.setItem(4, blacklist
-                ? item(Material.RED_DYE, "§c➕ 添加黑名单", Arrays.asList("§7点击后在聊天栏输入玩家名", "§7输入 取消 可退出"))
-                : item(Material.LIME_DYE, "§a➕ 添加白名单", Arrays.asList("§7点击后在聊天栏输入玩家名", "§7输入 取消 可退出")));
+                ? item(Material.RED_DYE, "§c➕ 添加黑名单",
+                        Arrays.asList("§7点击打开玩家选择界面", "§7直接点击玩家头像即可加入"))
+                : item(Material.LIME_DYE, "§a➕ 添加白名单",
+                        Arrays.asList("§7点击打开玩家选择界面", "§7直接点击玩家头像即可加入")));
         inv.setItem(8, item(Material.ARROW, "§e返回主菜单", null));
 
         List<UUID> members = new ArrayList<>(blacklist ? t.getBlacklist() : t.getWhitelist());
         members.sort(Comparator.comparing(u -> plugin.getTerritories().nameFor(u), String.CASE_INSENSITIVE_ORDER));
         for (int i = 0; i < members.size() && 9 + i < 36; i++) {
             UUID u = members.get(i);
-            OfflinePlayer off = Bukkit.getOfflinePlayer(u);
-            ItemStack head = new ItemStack(Material.PLAYER_HEAD);
-            SkullMeta meta = (SkullMeta) head.getItemMeta();
-            if (meta != null) {
-                meta.setOwningPlayer(off);
-                meta.setDisplayName("§f" + plugin.getTerritories().nameFor(u));
-                meta.setLore(List.of(blacklist ? "§c禁止进入领地" : "§a完全信任", "", "§e点击移除"));
-                head.setItemMeta(meta);
-            }
-            inv.setItem(9 + i, head);
+            inv.setItem(9 + i, buildHead(u, "§f" + plugin.getTerritories().nameFor(u),
+                    List.of(blacklist ? "§c禁止进入领地" : "§a完全信任", "", "§e点击移除")));
         }
         p.openInventory(inv);
+    }
+
+    /* ========================= 玩家选择界面（点头像直接加入） ========================= */
+
+    public void openPicker(Player p, Territory t, boolean blacklist, int page) {
+        List<UUID> candidates = pickerCandidates(t, blacklist);
+        int pages = Math.max(1, (candidates.size() + PICKER_PER_PAGE - 1) / PICKER_PER_PAGE);
+        int safePage = Math.max(0, Math.min(page, pages - 1));
+
+        sessions.put(p.getUniqueId(),
+                new GuiSession(blacklist ? GuiType.PICKER_B : GuiType.PICKER_W, t.getId(), safePage));
+        Inventory inv = Bukkit.createInventory(null, 54,
+                blacklist ? PICKER_BLACKLIST_TITLE : PICKER_WHITELIST_TITLE);
+        ItemStack filler = item(Material.GRAY_STAINED_GLASS_PANE, " ", null);
+        for (int i = 0; i < 54; i++) inv.setItem(i, filler);
+
+        inv.setItem(4, item(blacklist ? Material.RED_DYE : Material.LIME_DYE,
+                blacklist ? "§c添加到黑名单" : "§a添加到白名单",
+                Arrays.asList("§7领主: §f" + plugin.getTerritories().nameFor(t.getOwner()),
+                        "§7点击下方头像直接加入",
+                        "§8在线玩家优先，其次为服务器已知玩家",
+                        "§7可添加人数: §f" + candidates.size(),
+                        "",
+                        "§7第 §f" + (safePage + 1) + " §7/ §f" + pages + " §7页")));
+        inv.setItem(PICKER_BACK_SLOT, item(Material.ARROW, "§e返回名单", null));
+        inv.setItem(PICKER_CLOSE_SLOT, item(Material.BARRIER, "§c关闭", null));
+
+        if (candidates.isEmpty()) {
+            inv.setItem(22, item(Material.BARRIER, "§c没有可添加的玩家", Arrays.asList(
+                    "§7在线玩家与已知玩家都已在名单中",
+                    "§8从未进过服的玩家请用命令",
+                    "§8/res " + (blacklist ? "ban" : "trust") + " <玩家名>")));
+        }
+
+        int start = safePage * PICKER_PER_PAGE;
+        for (int i = 0; i < PICKER_PER_PAGE; i++) {
+            int index = start + i;
+            if (index >= candidates.size()) break;
+            UUID u = candidates.get(index);
+            boolean online = Bukkit.getPlayer(u) != null;
+            inv.setItem(9 + i, buildHead(u, "§f" + plugin.getTerritories().nameFor(u), Arrays.asList(
+                    online ? "§a在线" : "§7离线",
+                    "",
+                    blacklist ? "§c点击加入黑名单" : "§a点击加入白名单")));
+        }
+
+        if (safePage > 0) inv.setItem(PICKER_PREV_SLOT, item(Material.ARROW, "§e上一页", null));
+        inv.setItem(PICKER_PAGE_SLOT, item(Material.PAPER, "§7第 §f" + (safePage + 1) + " §7/ §f" + pages + " §7页", null));
+        if (safePage + 1 < pages) inv.setItem(PICKER_NEXT_SLOT, item(Material.ARROW, "§e下一页", null));
+
+        p.openInventory(inv);
+    }
+
+    /** 可添加的候选玩家：在线玩家优先，其次为服务器已知玩家（名字缓存，含离线） */
+    private List<UUID> pickerCandidates(Territory t, boolean blacklist) {
+        List<UUID> list = new ArrayList<>();
+        Set<UUID> seen = new HashSet<>();
+        Set<UUID> taken = blacklist ? t.getBlacklist() : t.getWhitelist();
+
+        for (Player online : Bukkit.getOnlinePlayers()) {
+            UUID id = online.getUniqueId();
+            if (id.equals(t.getOwner()) || taken.contains(id)) continue;
+            if (!blacklist && t.getBlacklist().contains(id)) continue; // 已拉黑者不能加白名单
+            if (seen.add(id)) list.add(id);
+        }
+
+        List<UUID> offline = new ArrayList<>();
+        for (UUID id : plugin.getTerritories().knownPlayerIds()) {
+            if (id.equals(t.getOwner()) || taken.contains(id)) continue;
+            if (!blacklist && t.getBlacklist().contains(id)) continue;
+            if (Bukkit.getPlayer(id) != null) continue; // 在线已列出
+            offline.add(id);
+        }
+        offline.sort(Comparator.comparing(u -> plugin.getTerritories().nameFor(u), String.CASE_INSENSITIVE_ORDER));
+        list.addAll(offline);
+        return list;
     }
 
     /* ========================= 传送列表 GUI ========================= */
@@ -286,6 +357,7 @@ public class GuiListener implements Listener {
             case MAIN -> mainClick(p, slot);
             case MODULES -> modulesClick(p, s, slot);
             case WHITELIST, BLACKLIST -> membersClick(p, s, slot, s.type == GuiType.BLACKLIST);
+            case PICKER_W, PICKER_B -> pickerClick(p, s, slot, s.type == GuiType.PICKER_B);
             case TPLIST -> tpListClick(p, slot);
         }
     }
@@ -411,9 +483,7 @@ public class GuiListener implements Listener {
             return;
         }
         if (slot == 4) {
-            pendingInputs.put(p.getUniqueId(), new PendingInput(t.getId(), blacklist));
-            p.closeInventory();
-            plugin.getMessages().send(p, "gui-input-prompt");
+            openNextTick(p, () -> openPicker(p, t, blacklist, 0));
             return;
         }
         if (slot < 9) return;
@@ -424,6 +494,40 @@ public class GuiListener implements Listener {
         UUID target = members.get(index);
         Actions.modifyList(plugin, p, t, plugin.getTerritories().nameFor(target), false, blacklist);
         openNextTick(p, () -> openMembers(p, t, blacklist));
+    }
+
+    private void pickerClick(Player p, GuiSession s, int slot, boolean blacklist) {
+        Territory t = plugin.getTerritories().get(s.territoryId);
+        if (t == null) {
+            openNextTick(p, () -> openMain(p));
+            return;
+        }
+        if (slot == PICKER_BACK_SLOT) {
+            openNextTick(p, () -> openMembers(p, t, blacklist));
+            return;
+        }
+        if (slot == PICKER_CLOSE_SLOT) {
+            p.closeInventory();
+            return;
+        }
+        if (slot == PICKER_PREV_SLOT) {
+            if (s.page > 0) openNextTick(p, () -> openPicker(p, t, blacklist, s.page - 1));
+            return;
+        }
+        if (slot == PICKER_NEXT_SLOT) {
+            openNextTick(p, () -> openPicker(p, t, blacklist, s.page + 1));
+            return;
+        }
+        if (slot < 9 || slot >= 9 + PICKER_PER_PAGE) return;
+
+        List<UUID> candidates = pickerCandidates(t, blacklist);
+        int index = s.page * PICKER_PER_PAGE + (slot - 9);
+        if (index >= candidates.size()) return;
+
+        UUID target = candidates.get(index);
+        Actions.modifyList(plugin, p, t, plugin.getTerritories().nameFor(target), true, blacklist);
+        // 停在当前页并刷新候选列表，方便连续添加多人
+        openNextTick(p, () -> openPicker(p, t, blacklist, s.page));
     }
 
     private void tpListClick(Player p, int slot) {
@@ -440,44 +544,9 @@ public class GuiListener implements Listener {
         Actions.teleport(plugin, p, t);
     }
 
-    /* ========================= 聊天栏输入 ========================= */
-
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onChat(AsyncPlayerChatEvent event) {
-        PendingInput pi = pendingInputs.get(event.getPlayer().getUniqueId());
-        if (pi == null) return;
-        if (System.currentTimeMillis() > pi.expireAt) {
-            pendingInputs.remove(event.getPlayer().getUniqueId());
-            return; // 超时，当普通聊天处理
-        }
-        pendingInputs.remove(event.getPlayer().getUniqueId());
-        event.setCancelled(true);
-        Player p = event.getPlayer();
-        String name = event.getMessage().trim();
-        if (name.equalsIgnoreCase("取消")) {
-            plugin.getMessages().send(p, "gui-input-cancelled");
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                Territory t = plugin.getTerritories().get(pi.territoryId);
-                if (t != null) openMembers(p, t, pi.blacklist);
-                else openMain(p);
-            });
-            return;
-        }
-        Bukkit.getScheduler().runTask(plugin, () -> {
-            Territory t = plugin.getTerritories().get(pi.territoryId);
-            if (t == null) {
-                plugin.getMessages().send(p, "not-in-territory");
-                return;
-            }
-            Actions.modifyList(plugin, p, t, name, true, pi.blacklist);
-            openMembers(p, t, pi.blacklist);
-        });
-    }
-
     @EventHandler
     public void onQuit(PlayerQuitEvent event) {
         sessions.remove(event.getPlayer().getUniqueId());
-        pendingInputs.remove(event.getPlayer().getUniqueId());
     }
 
     /* ========================= 拖拽与通用 ========================= */
@@ -498,7 +567,8 @@ public class GuiListener implements Listener {
     private boolean isOurGui(String title) {
         return MAIN_TITLE.equals(title) || MODULES_TITLE.equals(title)
                 || WHITELIST_TITLE.equals(title) || BLACKLIST_TITLE.equals(title)
-                || TP_TITLE.equals(title);
+                || TP_TITLE.equals(title)
+                || PICKER_WHITELIST_TITLE.equals(title) || PICKER_BLACKLIST_TITLE.equals(title);
     }
 
     /** 操作后刷新主菜单（下一 tick 重开，避免在点击事件内直接 openInventory 造成闪烁） */
@@ -524,6 +594,19 @@ public class GuiListener implements Listener {
 
     private int slotOf(Module m) {
         return MODULE_SLOTS.get(m.ordinal());
+    }
+
+    /** 玩家头颅物品（在线/离线均可显示） */
+    private ItemStack buildHead(UUID uuid, String displayName, List<String> lore) {
+        ItemStack head = new ItemStack(Material.PLAYER_HEAD);
+        SkullMeta meta = (SkullMeta) head.getItemMeta();
+        if (meta != null) {
+            meta.setOwningPlayer(Bukkit.getOfflinePlayer(uuid));
+            meta.setDisplayName(displayName);
+            meta.setLore(lore);
+            head.setItemMeta(meta);
+        }
+        return head;
     }
 
     private ItemStack item(Material mat, String name, List<String> lore) {

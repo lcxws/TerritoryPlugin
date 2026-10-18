@@ -512,6 +512,11 @@ public class TerritoryManager {
         if (!name.equals(old)) namesDirty = true;
     }
 
+    /** 已知玩家 UUID 快照（含离线；用于 GUI 头像选择） */
+    public Set<UUID> knownPlayerIds() {
+        return new HashSet<>(nameCache.keySet());
+    }
+
     /* ========================= 存储生命周期 ========================= */
 
     /** 初始化 SQL 存储并载入数据；失败返回 false（调用方应禁用插件） */
