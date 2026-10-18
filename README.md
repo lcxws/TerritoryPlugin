@@ -74,6 +74,8 @@
    - **右键**：切换 公开 / 仅信任；
    - **Shift+左键**：删除。
 
+新建链接默认是 **公开**：除黑名单外任何玩家都能触发。需要限制为领主/白名单时，右键切回“仅信任”。
+
 选择过程中有 60 秒时限，潜行右键可取消。命令同样可用：
 
 ```
@@ -114,7 +116,7 @@
 link:
   enabled: true
   max-per-territory: 8       # 每个领地最多链接数，-1 = 不限
-  default-mode: TRUSTED      # 新建链接默认权限：TRUSTED / PUBLIC
+  default-mode: PUBLIC       # 新建链接默认权限：PUBLIC（除黑名单外任何人）/ TRUSTED（仅信任）
   default-auto-close-seconds: 5
   cooldown-ms: 500
   max-distance: 0            # 源到目标的最大距离，0 = 不限

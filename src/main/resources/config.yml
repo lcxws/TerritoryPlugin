@@ -46,8 +46,8 @@ link:
   enabled: true
   # 每个领地最多几条链接（-1 = 不限制）
   max-per-territory: 8
-  # 新建链接的默认模式：TRUSTED（仅领主/白名单）或 PUBLIC（任何未被拉黑的玩家）
-  default-mode: TRUSTED
+  # 新建链接的默认模式：PUBLIC（除黑名单外任何人）或 TRUSTED（仅领主/白名单）
+  default-mode: PUBLIC
   # 按钮触发的默认自动关门秒数（0 = 不自动关，按钮改为开/关切换）；拉杆不使用自动关门
   default-auto-close-seconds: 5
   # 同一玩家同一链接的触发冷却（毫秒）

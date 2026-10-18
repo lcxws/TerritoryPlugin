@@ -234,7 +234,7 @@ public class LinkListener implements Listener {
         }
 
         InteractionLink.Mode mode = InteractionLink.Mode.byName(
-                plugin.getConfig().getString("link.default-mode", "TRUSTED"));
+                plugin.getConfig().getString("link.default-mode", "PUBLIC"));
         int autoClose = pend.leverSource ? 0
                 : Math.max(0, plugin.getConfig().getInt("link.default-auto-close-seconds", 5));
         InteractionLink link = InteractionLink.create(targetTerritory.getId(), pend.source, target, mode, autoClose);
