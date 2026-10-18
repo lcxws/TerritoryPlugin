@@ -516,6 +516,11 @@ public class TerritoryManager {
         if (!name.equals(old)) markDirty();
     }
 
+    /** 已知玩家 UUID 快照（含离线；用于 GUI 头像选择） */
+    public Set<UUID> knownPlayerIds() {
+        return new HashSet<>(nameCache.keySet());
+    }
+
     /* ========================= 持久化 ========================= */
 
     public boolean isDirty() {

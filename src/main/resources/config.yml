@@ -101,8 +101,6 @@ messages:
   pvp-denied: "&c该领地已开启禁用PvP模块，无法攻击玩家。"
   tp-blocked: "&c该领地已开启禁访客传送模块，请联系主人加入白名单后传送。"
   gui-not-owner: "&c只有站在自己领地内的领主可以打开保护设置。"
-  gui-input-prompt: "&a请在聊天栏输入 &e玩家名 &a以继续，输入 &e取消 &a退出输入（30秒内有效）。"
-  gui-input-cancelled: "&7已取消输入。"
   view-none: "&c这里没有领地可查看。"
   view-start: "&a正在渲染领地边界粒子 &e%seconds% &a秒…"
   view-done: "&7边界粒子渲染结束。"
